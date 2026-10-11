@@ -101,7 +101,7 @@ class EdgeStyleResolver {
   /// Stroke color of [edge].
   Color color(Edge edge, {bool selected = false}) {
     if (selected) return theme.selectedEdgeColor;
-    final c = edge.style.color;
+    final c = controller.edgeRuntime(edge.id)?.color ?? edge.style.color;
     if (c != null) return c;
     if (!theme.colorEdgesByType) return theme.edgeColor;
     final type = controller.graph.port(edge.source)?.type;
@@ -220,7 +220,13 @@ class EdgePainter extends CustomPainter {
   void _paintLowDetail(Canvas canvas, EditorViewport v) {
     final graph = controller.graph;
     final sel = controller.selection.value;
-    final key = (graph, controller.revision.value, sel, theme);
+    final key = (
+      graph,
+      controller.revision.value,
+      controller.edgeRuntimeStamp,
+      sel,
+      theme,
+    );
     if (cache._lodKey != key) {
       final resolver = EdgeStyleResolver(controller, theme);
       final groups = <Color, List<double>>{};
@@ -279,7 +285,7 @@ class EdgePainter extends CustomPainter {
         selected.add(e);
         continue;
       }
-      if (skipAnimated && e.style.animated) {
+      if (skipAnimated && controller.isEdgeAnimated(e)) {
         continue;
       }
       draw(e, false);
@@ -318,7 +324,7 @@ class EdgePainter extends CustomPainter {
         width,
       );
     }
-    final label = e.label;
+    final label = controller.edgeRuntime(e.id)?.label ?? e.label;
     if (showLabels && label != null && label.isNotEmpty) {
       final style = theme.edgeLabelStyle.copyWith(
         color: e.style.labelColor,
@@ -399,7 +405,11 @@ class AnimatedEdgePainter extends CustomPainter {
     final showLabels = v.zoom >= controller.config.lodTextThreshold * 2;
     for (final id in controller.edgeIndex.query(visible)) {
       final e = graph.edge(id);
-      if (e == null || !e.style.animated || sel.edges.contains(id)) continue;
+      if (e == null ||
+          !controller.isEdgeAnimated(e) ||
+          sel.edges.contains(id)) {
+        continue;
+      }
       final g = controller.edgeGeometry(e);
       if (g == null) continue;
       final color = resolver.color(e);
@@ -457,7 +467,7 @@ class AnimatedEdgePainter extends CustomPainter {
         width,
       );
     }
-    final label = e.label;
+    final label = controller.edgeRuntime(e.id)?.label ?? e.label;
     if (showLabels && label != null && label.isNotEmpty) {
       final tp = cache.label(label, theme.edgeLabelStyle);
       final mid = g.midpoint;

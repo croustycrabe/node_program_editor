@@ -43,6 +43,23 @@ enum NodeAlignment {
   bottom,
 }
 
+/// Transient visual state of an edge, set by execution engines (not saved,
+/// not undoable). See [NodeEditorController.setEdgeRuntime].
+@immutable
+class EdgeRuntimeState {
+  /// Creates a runtime state.
+  const EdgeRuntimeState({this.animated = false, this.color, this.label});
+
+  /// Shows the flow animation.
+  final bool animated;
+
+  /// Overrides the stroke color.
+  final Color? color;
+
+  /// Overrides the label (e.g. "3 items").
+  final String? label;
+}
+
 /// A link being dragged from a port.
 @immutable
 class ConnectionDraft {
@@ -191,10 +208,22 @@ class NodeEditorController extends ChangeNotifier implements GraphMutator {
   final ValueNotifier<EditorViewport> viewport;
 
   final ValueNotifier<Size> _viewportSize = ValueNotifier(const Size(800, 600));
+  bool _hasLayout = false;
+  VoidCallback? _pendingFit;
 
   /// Size of the canvas widget (set by the canvas after layout).
   Size get viewportSize => _viewportSize.value;
-  set viewportSize(Size value) => _viewportSize.value = value;
+  set viewportSize(Size value) {
+    _hasLayout = true;
+    _viewportSize.value = value;
+    final fit = _pendingFit;
+    _pendingFit = null;
+    fit?.call();
+  }
+
+  /// Whether a canvas reported its size (view operations before that are
+  /// deferred until the first layout).
+  bool get hasLayout => _hasLayout;
 
   /// Fires when the canvas is resized.
   ValueListenable<Size> get viewportSizeListenable => _viewportSize;
@@ -293,8 +322,53 @@ class NodeEditorController extends ChangeNotifier implements GraphMutator {
   int _renderStamp = 0;
   int _animatedEdges = 0;
 
-  /// Number of animated edges in the current graph.
-  int get animatedEdgeCount => _animatedEdges;
+  final Map<EdgeId, EdgeRuntimeState> _edgeRuntime = {};
+  int _runtimeStamp = 0;
+
+  /// Changes whenever edge runtime states change.
+  int get edgeRuntimeStamp => _runtimeStamp;
+
+  /// Number of animated edges in the current graph (styles and runtime).
+  int get animatedEdgeCount =>
+      _animatedEdges + _edgeRuntime.values.where((r) => r.animated).length;
+
+  /// Runtime state of edge [id], if any.
+  EdgeRuntimeState? edgeRuntime(EdgeId id) => _edgeRuntime[id];
+
+  /// Whether edge [edge] is currently animated (style or runtime).
+  bool isEdgeAnimated(Edge edge) =>
+      edge.style.animated || (_edgeRuntime[edge.id]?.animated ?? false);
+
+  /// Sets (or clears with null) the transient state of edge [id]: use it to
+  /// visualize execution (data flowing, errors) without touching the
+  /// document or the undo history.
+  void setEdgeRuntime(EdgeId id, EdgeRuntimeState? state) {
+    if (state == null) {
+      if (_edgeRuntime.remove(id) == null) return;
+    } else {
+      _edgeRuntime[id] = state;
+    }
+    _runtimeStamp++;
+    _dirtyEdges = true;
+    if (_batchDepth == 0) _flush();
+  }
+
+  /// Clears every edge and node runtime state.
+  void clearRuntime() {
+    batch(() {
+      if (_edgeRuntime.isNotEmpty) {
+        _edgeRuntime.clear();
+        _runtimeStamp++;
+        _dirtyEdges = true;
+      }
+      for (final n in graph.nodes) {
+        if (n.runtime.isNotEmpty) {
+          n.runtime.clear();
+          _touchNode(n.id);
+        }
+      }
+    });
+  }
 
   /// Changes whenever something affecting the rendering of non-selected
   /// nodes changes (used by low-detail renderers to cache vertex buffers).
@@ -475,6 +549,7 @@ class NodeEditorController extends ChangeNotifier implements GraphMutator {
   }
 
   void _forgetEdge(EdgeId id) {
+    _edgeRuntime.remove(id);
     edgeIndex.remove(id);
     _edgeGeometry.remove(id);
     if (_selection.value.edges.contains(id)) {
@@ -1128,12 +1203,14 @@ class NodeEditorController extends ChangeNotifier implements GraphMutator {
     execute(SetNodeDataCommand(id, Map.of(n.data), data));
   }
 
-  /// Updates the data payload of node [id] without recording history (for
-  /// runtime state such as execution status or previews).
-  void setRuntimeData(NodeId id, Map<String, Object?> data) {
+  /// Merges [values] into the transient runtime state of node [id]
+  /// (`NodeInstance.runtime`): execution status, previews, results... Not
+  /// saved and not recorded in the history. The built-in node body shows
+  /// `status` (`running`, `success`, `warning`, `error`) and `statusText`.
+  void setRuntimeData(NodeId id, Map<String, Object?> values) {
     final n = graph.node(id);
     if (n == null) return;
-    n.data.addAll(data);
+    n.runtime.addAll(values);
     _touchNode(id);
   }
 
@@ -1287,6 +1364,10 @@ class NodeEditorController extends ChangeNotifier implements GraphMutator {
 
   /// Centers the viewport on canvas point [point].
   void centerOn(Offset point, {double? zoom, bool animate = true}) {
+    if (!_hasLayout) {
+      _pendingFit = () => centerOn(point, zoom: zoom, animate: false);
+      return;
+    }
     final z = (zoom ?? viewport.value.zoom).clamp(
       config.minZoom,
       config.maxZoom,
@@ -1307,6 +1388,11 @@ class NodeEditorController extends ChangeNotifier implements GraphMutator {
     double? maxZoom,
     bool animate = true,
   }) {
+    if (!_hasLayout) {
+      _pendingFit = () =>
+          fitView(ids: ids, padding: padding, maxZoom: maxZoom, animate: false);
+      return;
+    }
     final b = boundsOf(ids);
     if (b == null || viewportSize.isEmpty) return;
     final zx = (viewportSize.width - padding * 2) / math.max(b.width, 1);

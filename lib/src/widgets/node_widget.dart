@@ -545,7 +545,7 @@ class PortPainter extends CustomPainter {
 }
 
 /// Runtime status shown as a badge in node headers, read from
-/// `node.data['status']`.
+/// `node.runtime['status']` (or `node.data['status']`).
 enum NodeRunStatus {
   /// Waiting / running.
   running,
@@ -582,7 +582,7 @@ class DefaultNodeBody extends StatelessWidget {
     final layout = def.portLayout;
     final colors = resolveNodeColors(node, theme);
     final anchors = PortGeometry.relativeAnchors(node);
-    final status = node.data['status'];
+    final status = node.runtime['status'] ?? node.data['status'];
     final statusColor = switch (status) {
       'running' => const Color(0xFF2E90FA),
       'success' => const Color(0xFF12B76A),
@@ -618,7 +618,11 @@ class DefaultNodeBody extends StatelessWidget {
                   ),
                   if (statusColor != null)
                     Tooltip(
-                      message: (node.data['statusText'] ?? status).toString(),
+                      message:
+                          (node.runtime['statusText'] ??
+                                  node.data['statusText'] ??
+                                  status)
+                              .toString(),
                       child: _StatusDot(
                         color: statusColor,
                         pulsing: status == 'running',

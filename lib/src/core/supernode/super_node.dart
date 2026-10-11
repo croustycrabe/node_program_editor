@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:ui';
 
-import 'package:flutter/widgets.dart' show IconData;
+import 'package:flutter/material.dart' show Icons;
 
 import '../../params/param_types.dart';
 import '../commands.dart';
@@ -169,7 +169,7 @@ class SuperNodeNodeDefinition extends NodeDefinition {
         title: superNode.name,
         category: superNode.category,
         description: superNode.description ?? 'Reusable function',
-        icon: const IconData(0xe1b1, fontFamily: 'MaterialIcons'),
+        icon: Icons.account_tree,
         ports: [...superNode.inputs, ...superNode.outputs],
         params: superNode.paramSpecs,
         variant: superNode.params.isEmpty

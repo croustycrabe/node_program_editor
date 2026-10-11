@@ -466,7 +466,7 @@ class _NodeCanvasState extends State<NodeCanvas> with TickerProviderStateMixin {
     return LayoutBuilder(
       builder: (context, constraints) {
         final size = constraints.biggest;
-        if (_c.viewportSize != size) {
+        if (!_c.hasLayout || _c.viewportSize != size) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (mounted) _c.viewportSize = size;
           });

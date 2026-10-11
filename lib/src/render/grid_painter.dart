@@ -84,6 +84,9 @@ class GridPainter extends CustomPainter {
       step *= 2;
     }
     final screenStep = step * v.zoom;
+    // Fade dense minor grids like the shader does.
+    final fade = ((screenStep - 8) / 8).clamp(0.0, 1.0) * 0.6 + 0.4;
+    minor = minor.withValues(alpha: minor.a * fade);
     final x0 = (v.offset.dx % screenStep) - screenStep;
     final y0 = (v.offset.dy % screenStep) - screenStep;
     final cols = (size.width / screenStep).ceil() + 2;

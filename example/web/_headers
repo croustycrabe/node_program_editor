@@ -1,0 +1,25 @@
+# Cloudflare Pages response headers for the Flutter web build.
+#
+# Cross-origin isolation lets the skwasm renderer (--wasm builds) use
+# multi-threaded rendering. "credentialless" keeps third-party resources
+# (fallback fonts) loading while still enabling isolation.
+/*
+  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Embedder-Policy: credentialless
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+
+# Hashed / versioned engine files: cache aggressively.
+/canvaskit/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/assets/*
+  Cache-Control: public, max-age=604800
+
+# Entry points must always be revalidated so new deployments are picked up.
+/index.html
+  Cache-Control: no-cache
+/flutter_bootstrap.js
+  Cache-Control: no-cache
+/flutter_service_worker.js
+  Cache-Control: no-cache

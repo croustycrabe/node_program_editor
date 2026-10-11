@@ -1,12 +1,12 @@
 {
-    "name": "example",
-    "short_name": "example",
+    "name": "node_program_editor showcase",
+    "short_name": "Node editor",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
-    "orientation": "portrait-primary",
+    "background_color": "#F6F7F9",
+    "theme_color": "#3B82F6",
+    "description": "Node graph engine for Flutter: automation, scientific and vision builders.",
+    "orientation": "any",
     "prefer_related_applications": false,
     "icons": [
         {

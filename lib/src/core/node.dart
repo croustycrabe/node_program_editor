@@ -455,6 +455,11 @@ class NodeInstance {
   /// status, results...). Persisted in the logic file.
   final Map<String, Object?> data;
 
+  /// Transient state written by execution engines (status, previews,
+  /// results). Never saved nor undoable. See
+  /// `NodeEditorController.setRuntimeData`.
+  final Map<String, Object?> runtime = {};
+
   /// Ports added to this instance on top of the definition ports (e.g. a
   /// switch node with a configurable number of outputs).
   List<PortSpec> customPorts;
