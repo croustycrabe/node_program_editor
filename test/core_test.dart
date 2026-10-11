@@ -324,4 +324,19 @@ void main() {
       expect(g, isNotNull);
     });
   });
+
+  test('autoLayout orders nodes left to right in one undo step', () {
+    final c = testController();
+    final (s, g, k) = buildChain(c);
+    c.moveNodes({s.id: const Offset(900, 500), k.id: const Offset(-300, 40)});
+    final depth = c.history.undoDepth;
+    c.autoLayout();
+    expect(c.history.undoDepth, depth + 1);
+    expect(
+      s.position.dx < g.position.dx && g.position.dx < k.position.dx,
+      isTrue,
+    );
+    c.undo();
+    expect(s.position, const Offset(900, 500));
+  });
 }

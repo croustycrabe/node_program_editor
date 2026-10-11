@@ -398,25 +398,25 @@ class _NodeCanvasState extends State<NodeCanvas> with TickerProviderStateMixin {
   }
 
   Map<Type, Action<Intent>> get _actions => {
-    DeleteSelectionIntent: CallbackAction<DeleteSelectionIntent>(
+    DeleteSelectionIntent: _EditorAction<DeleteSelectionIntent>(
       onInvoke: (_) => _c.deleteSelection(),
     ),
-    CopySelectionIntent: CallbackAction<CopySelectionIntent>(
+    CopySelectionIntent: _EditorAction<CopySelectionIntent>(
       onInvoke: (_) => _c.copySelection(),
     ),
-    CutSelectionIntent: CallbackAction<CutSelectionIntent>(
+    CutSelectionIntent: _EditorAction<CutSelectionIntent>(
       onInvoke: (_) => _c.cutSelection(),
     ),
-    PasteIntent: CallbackAction<PasteIntent>(onInvoke: (_) => _c.paste()),
-    DuplicateSelectionIntent: CallbackAction<DuplicateSelectionIntent>(
+    PasteIntent: _EditorAction<PasteIntent>(onInvoke: (_) => _c.paste()),
+    DuplicateSelectionIntent: _EditorAction<DuplicateSelectionIntent>(
       onInvoke: (_) => _c.duplicateSelection(),
     ),
-    UndoIntent: CallbackAction<UndoIntent>(onInvoke: (_) => _c.undo()),
-    RedoIntent: CallbackAction<RedoIntent>(onInvoke: (_) => _c.redo()),
-    SelectAllIntent: CallbackAction<SelectAllIntent>(
+    UndoIntent: _EditorAction<UndoIntent>(onInvoke: (_) => _c.undo()),
+    RedoIntent: _EditorAction<RedoIntent>(onInvoke: (_) => _c.redo()),
+    SelectAllIntent: _EditorAction<SelectAllIntent>(
       onInvoke: (_) => _c.selectAll(),
     ),
-    CancelIntent: CallbackAction<CancelIntent>(
+    CancelIntent: _EditorAction<CancelIntent>(
       onInvoke: (_) {
         if (_c.connectionDraft.value != null) {
           _c.cancelConnection();
@@ -428,26 +428,26 @@ class _NodeCanvasState extends State<NodeCanvas> with TickerProviderStateMixin {
         return null;
       },
     ),
-    GroupSelectionIntent: CallbackAction<GroupSelectionIntent>(
+    GroupSelectionIntent: _EditorAction<GroupSelectionIntent>(
       onInvoke: (_) => _c.groupSelection(),
     ),
-    UngroupSelectionIntent: CallbackAction<UngroupSelectionIntent>(
+    UngroupSelectionIntent: _EditorAction<UngroupSelectionIntent>(
       onInvoke: (_) => _c.ungroupSelection(),
     ),
-    ToggleLockIntent: CallbackAction<ToggleLockIntent>(
+    ToggleLockIntent: _EditorAction<ToggleLockIntent>(
       onInvoke: (_) => _c.toggleLockSelection(),
     ),
-    NudgeSelectionIntent: CallbackAction<NudgeSelectionIntent>(
+    NudgeSelectionIntent: _EditorAction<NudgeSelectionIntent>(
       onInvoke: (i) {
         final step = i.large ? _c.config.nudgeStepLarge : _c.config.nudgeStep;
         _c.nudgeSelection(Offset(i.dx * step, i.dy * step));
         return null;
       },
     ),
-    FitViewIntent: CallbackAction<FitViewIntent>(onInvoke: (_) => _c.fitView()),
-    ZoomInIntent: CallbackAction<ZoomInIntent>(onInvoke: (_) => _c.zoomIn()),
-    ZoomOutIntent: CallbackAction<ZoomOutIntent>(onInvoke: (_) => _c.zoomOut()),
-    ExitScopeIntent: CallbackAction<ExitScopeIntent>(
+    FitViewIntent: _EditorAction<FitViewIntent>(onInvoke: (_) => _c.fitView()),
+    ZoomInIntent: _EditorAction<ZoomInIntent>(onInvoke: (_) => _c.zoomIn()),
+    ZoomOutIntent: _EditorAction<ZoomOutIntent>(onInvoke: (_) => _c.zoomOut()),
+    ExitScopeIntent: _EditorAction<ExitScopeIntent>(
       onInvoke: (_) => _c.exitSuperNode(),
     ),
   };
@@ -608,4 +608,24 @@ class _NodeCanvasState extends State<NodeCanvas> with TickerProviderStateMixin {
       },
     );
   }
+}
+
+/// A canvas action that steps aside while a text field has focus, so keys
+/// such as Backspace, arrows or Ctrl+A keep editing text inside nodes and
+/// dialogs instead of acting on the graph.
+class _EditorAction<T extends Intent> extends CallbackAction<T> {
+  _EditorAction({required super.onInvoke});
+
+  static bool get _textHasFocus {
+    final ctx = FocusManager.instance.primaryFocus?.context;
+    if (ctx == null) return false;
+    return ctx.widget is EditableText ||
+        ctx.findAncestorWidgetOfExactType<EditableText>() != null;
+  }
+
+  @override
+  bool isEnabled(T intent) => !_textHasFocus;
+
+  @override
+  bool consumesKey(T intent) => !_textHasFocus;
 }

@@ -21,13 +21,18 @@ Future<void> loadFonts() async {
       final file = File('$dir/$f');
       if (file.existsSync()) {
         loader.addFont(
-            Future.value(ByteData.sublistView(file.readAsBytesSync())));
+          Future.value(ByteData.sublistView(file.readAsBytesSync())),
+        );
       }
     }
     await loader.load();
   }
 
-  await load('Roboto', ['roboto-regular.ttf', 'roboto-medium.ttf', 'roboto-bold.ttf']);
+  await load('Roboto', [
+    'roboto-regular.ttf',
+    'roboto-medium.ttf',
+    'roboto-bold.ttf',
+  ]);
   await load('MaterialIcons', ['materialicons-regular.otf']);
 }
 
@@ -46,39 +51,50 @@ Future<void> screenshot(WidgetTester tester, GlobalKey key, String name) async {
 
 final _shotKey = GlobalKey();
 
-Future<NodeEditorController> pumpEditor(WidgetTester tester,
-    {bool dark = false, void Function(NodeEditorController c)? setup}) async {
+Future<NodeEditorController> pumpEditor(
+  WidgetTester tester, {
+  bool dark = false,
+  void Function(NodeEditorController c)? setup,
+}) async {
   tester.view.physicalSize = const Size(1400, 900);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
   final c = testController();
   setup?.call(c);
-  await tester.pumpWidget(MaterialApp(
-    debugShowCheckedModeBanner: false,
-    theme: ThemeData(
+  await tester.pumpWidget(
+    MaterialApp(
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(
         fontFamily: 'Roboto',
-        brightness: dark ? Brightness.dark : Brightness.light),
-    home: RepaintBoundary(
-      key: _shotKey,
-      child: Scaffold(body: NodeEditor(controller: c)),
+        brightness: dark ? Brightness.dark : Brightness.light,
+      ),
+      home: RepaintBoundary(
+        key: _shotKey,
+        child: Scaffold(body: NodeEditor(controller: c)),
+      ),
     ),
-  ));
+  );
   await tester.pump();
   return c;
 }
 
 Finder nodeTitle(String title) => find.descendant(
-    of: find.byType(DefaultNodeBody), matching: find.text(title));
+  of: find.byType(DefaultNodeBody),
+  matching: find.text(title),
+);
 
 void main() {
   setUpAll(loadFonts);
 
   testWidgets('renders nodes, palette, toolbar and minimap', (tester) async {
     late (NodeInstance, NodeInstance, NodeInstance) chain;
-    final c = await pumpEditor(tester, setup: (c) {
-      chain = buildChain(c);
-      c.setViewport(const EditorViewport(offset: Offset(80, 200)));
-    });
+    final c = await pumpEditor(
+      tester,
+      setup: (c) {
+        chain = buildChain(c);
+        c.setViewport(const EditorViewport(offset: Offset(80, 200)));
+      },
+    );
     await tester.pump();
     expect(nodeTitle('Gain'), findsOneWidget);
     expect(find.byType(NodeWidget), findsNWidgets(3));
@@ -92,10 +108,13 @@ void main() {
 
   testWidgets('dragging a node moves it as one undo step', (tester) async {
     late NodeInstance gain;
-    final c = await pumpEditor(tester, setup: (c) {
-      gain = buildChain(c).$2;
-      c.setViewport(const EditorViewport(offset: Offset(80, 200)));
-    });
+    final c = await pumpEditor(
+      tester,
+      setup: (c) {
+        gain = buildChain(c).$2;
+        c.setViewport(const EditorViewport(offset: Offset(80, 200)));
+      },
+    );
     await tester.pump();
     final start = gain.position;
     final depth = c.history.undoDepth;
@@ -110,10 +129,13 @@ void main() {
 
   testWidgets('dragging from a port creates a link', (tester) async {
     late (NodeInstance, NodeInstance, NodeInstance) chain;
-    final c = await pumpEditor(tester, setup: (c) {
-      chain = buildChain(c);
-      c.setViewport(const EditorViewport(offset: Offset(80, 200)));
-    });
+    final c = await pumpEditor(
+      tester,
+      setup: (c) {
+        chain = buildChain(c);
+        c.setViewport(const EditorViewport(offset: Offset(80, 200)));
+      },
+    );
     await tester.pump();
     final (_, g, k) = chain;
     final from = c.viewport.value.toScreen(c.portAnchor(PortRef(g.id, 'out'))!);
@@ -133,10 +155,13 @@ void main() {
 
   testWidgets('keyboard: delete, undo, select all', (tester) async {
     late NodeInstance gain;
-    final c = await pumpEditor(tester, setup: (c) {
-      gain = buildChain(c).$2;
-      c.setViewport(const EditorViewport(offset: Offset(80, 200)));
-    });
+    final c = await pumpEditor(
+      tester,
+      setup: (c) {
+        gain = buildChain(c).$2;
+        c.setViewport(const EditorViewport(offset: Offset(80, 200)));
+      },
+    );
     await tester.pump();
     await tester.tap(nodeTitle('Gain'));
     await tester.pump();
@@ -154,10 +179,13 @@ void main() {
   });
 
   testWidgets('shift drag on background draws a selection box', (tester) async {
-    final c = await pumpEditor(tester, setup: (c) {
-      buildChain(c);
-      c.setViewport(const EditorViewport(offset: Offset(80, 200)));
-    });
+    final c = await pumpEditor(
+      tester,
+      setup: (c) {
+        buildChain(c);
+        c.setViewport(const EditorViewport(offset: Offset(80, 200)));
+      },
+    );
     await tester.pump();
     final box = tester.getTopLeft(find.byType(NodeCanvas));
     await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
@@ -173,14 +201,21 @@ void main() {
     expect(c.selection.value.nodes.length, 2);
   });
 
-  testWidgets('zooming out switches to the low-detail renderer', (tester) async {
-    final c = await pumpEditor(tester, setup: (c) {
-      for (var i = 0; i < 200; i++) {
-        c.addNode(i.isEven ? 'gain' : 'source',
+  testWidgets('zooming out switches to the low-detail renderer', (
+    tester,
+  ) async {
+    final c = await pumpEditor(
+      tester,
+      setup: (c) {
+        for (var i = 0; i < 200; i++) {
+          c.addNode(
+            i.isEven ? 'gain' : 'source',
             position: Offset((i % 20) * 260.0, (i ~/ 20) * 160.0),
-            select: false);
-      }
-    });
+            select: false,
+          );
+        }
+      },
+    );
     c.setViewport(const EditorViewport(zoom: 0.2));
     await tester.pump();
     expect(find.byType(NodeWidget), findsNothing);
@@ -199,26 +234,34 @@ void main() {
     await tester.pump();
     expect(c.graph.nodes.single.type, 'sink');
     final before = c.viewport.value;
-    await tester.tapAt(tester.getCenter(find.byType(NodeMiniMap)) + const Offset(60, 40));
+    await tester.tapAt(
+      tester.getCenter(find.byType(NodeMiniMap)) + const Offset(60, 40),
+    );
     await tester.pumpAndSettle();
     expect(c.viewport.value, isNot(before));
   });
 
   testWidgets('edit dialog changes params as one undo step', (tester) async {
     late NodeInstance gain;
-    final c = await pumpEditor(tester, setup: (c) {
-      gain = buildChain(c).$2;
-      c.setViewport(const EditorViewport(offset: Offset(80, 200)));
-    });
+    final c = await pumpEditor(
+      tester,
+      setup: (c) {
+        gain = buildChain(c).$2;
+        c.setViewport(const EditorViewport(offset: Offset(80, 200)));
+      },
+    );
     await tester.pump();
     c.editNodeHandler!(gain.id);
     await tester.pumpAndSettle();
     expect(find.text('Edit Gain'), findsOneWidget);
     await screenshot(tester, _shotKey, 'edit_dialog');
     final field = find.descendant(
-        of: find.descendant(
-            of: find.byType(AlertDialog), matching: find.byType(NumberField)),
-        matching: find.byType(TextField));
+      of: find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.byType(NumberField),
+      ),
+      matching: find.byType(TextField),
+    );
     await tester.enterText(field.first, '7.5');
     await tester.testTextInput.receiveAction(TextInputAction.done);
     await tester.pump();
@@ -231,10 +274,14 @@ void main() {
 
   testWidgets('dark theme and super node breadcrumb', (tester) async {
     late (NodeInstance, NodeInstance, NodeInstance) chain;
-    final c = await pumpEditor(tester, dark: true, setup: (c) {
-      chain = buildChain(c);
-      c.setViewport(const EditorViewport(offset: Offset(80, 200)));
-    });
+    final c = await pumpEditor(
+      tester,
+      dark: true,
+      setup: (c) {
+        chain = buildChain(c);
+        c.setViewport(const EditorViewport(offset: Offset(80, 200)));
+      },
+    );
     await tester.pump();
     c.selectNodes([chain.$2.id]);
     final inst = c.groupSelection(name: 'Amplifier')!;
@@ -252,10 +299,13 @@ void main() {
 
   testWidgets('dragging an edge "+" handle inserts a waypoint', (tester) async {
     late (NodeInstance, NodeInstance, NodeInstance) chain;
-    final c = await pumpEditor(tester, setup: (c) {
-      chain = buildChain(c);
-      c.setViewport(const EditorViewport(offset: Offset(80, 200)));
-    });
+    final c = await pumpEditor(
+      tester,
+      setup: (c) {
+        chain = buildChain(c);
+        c.setViewport(const EditorViewport(offset: Offset(80, 200)));
+      },
+    );
     await tester.pump();
     final edge = c.graph.outgoing(chain.$1.id).single;
     c.selectEdges([edge.id]);
@@ -269,5 +319,32 @@ void main() {
     await screenshot(tester, _shotKey, 'waypoint');
     c.undo();
     expect(c.graph.edge(edge.id)!.waypoints, isEmpty);
+  });
+
+  testWidgets('typing in a node text field does not trigger graph shortcuts', (
+    tester,
+  ) async {
+    late NodeInstance gain;
+    final c = await pumpEditor(
+      tester,
+      setup: (c) {
+        gain = buildChain(c).$2;
+        c.setViewport(const EditorViewport(offset: Offset(80, 200)));
+      },
+    );
+    await tester.pump();
+    c.selectNodes([gain.id]);
+    await tester.pump();
+    final field = find.descendant(
+      of: find.byType(NodeWidget),
+      matching: find.byType(TextField),
+    );
+    await tester.tap(field.first);
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.backspace);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+    await tester.pump();
+    expect(c.graph.containsNode(gain.id), isTrue);
+    expect(c.history.undoLabel, isNot('Move node'));
   });
 }

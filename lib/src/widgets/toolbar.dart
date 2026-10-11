@@ -135,6 +135,16 @@ class NodeToolbar extends StatelessWidget {
       ),
       const ToolbarDivider(),
       ToolbarItem(
+        icon: Icons.auto_fix_high,
+        tooltip: 'Auto layout',
+        isEnabled: (c) => c.graph.nodeCount > 1,
+        onPressed: (c) {
+          c.autoLayout(selectionOnly: c.selection.value.nodes.length > 1);
+          c.fitView();
+        },
+      ),
+      const ToolbarDivider(),
+      ToolbarItem(
         icon: Icons.grid_on,
         tooltip: 'Show grid',
         isActive: (c) => c.canvasSettings.value.showGrid,

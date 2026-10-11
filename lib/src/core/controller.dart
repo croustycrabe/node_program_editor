@@ -1052,6 +1052,30 @@ class NodeEditorController extends ChangeNotifier implements GraphMutator {
     });
   }
 
+  /// Arranges the nodes in layers from left to right following the links
+  /// (undoable). With [selectionOnly], only the selected nodes move.
+  void autoLayout({
+    double columnGap = 80,
+    double rowGap = 40,
+    bool selectionOnly = false,
+  }) {
+    final copy = graph.copy();
+    final only = selectionOnly ? _selection.value.nodes : null;
+    final origin = boundsOf(only)?.topLeft ?? Offset.zero;
+    GraphCodec.autoLayout(
+      copy,
+      columnGap: columnGap,
+      rowGap: rowGap,
+      origin: origin,
+    );
+    moveNodes({
+      for (final n in copy.nodes)
+        if ((only == null || only.contains(n.id)) &&
+            !(graph.node(n.id)?.locked ?? true))
+          n.id: canvasSettings.value.snapOffset(n.position),
+    });
+  }
+
   /// Aligns the selected, unlocked nodes.
   void alignSelection(NodeAlignment alignment) {
     final nodes = [
