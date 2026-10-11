@@ -1,0 +1,6 @@
+# Dart tooling (dart format, dartdoc) expects LF line endings.
+*.dart text eol=lf
+*.md text eol=lf
+*.yaml text eol=lf
+*.frag text eol=lf
+*.json text eol=lf
