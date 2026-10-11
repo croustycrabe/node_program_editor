@@ -1,21 +1,22 @@
-name: example
-description: "A new Flutter project."
+name: node_program_editor_showcase
+description: "Showcase for node_program_editor: automation, scientific and computer-vision builders."
 publish_to: 'none'
-version: 0.1.0
+version: 3.0.0
 
 environment:
-  sdk: ^3.6.1
+  sdk: ^3.13.0
+  flutter: ">=3.47.0"
 
 dependencies:
   flutter:
     sdk: flutter
+  node_program_editor:
+    path: ../
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^5.0.0
-  node_program_editor:
-    path: ../
+  flutter_lints: ^6.0.0
 
 flutter:
   uses-material-design: true

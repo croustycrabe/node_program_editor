@@ -1,4 +1,3 @@
-export './widgets/canvas.dart';
-export './models/node_data_model.dart';
-export './models/port_model.dart';
-export './core/controller.dart';
+/// A high-performance, fully customizable node graph editor engine for
+/// Flutter ("React Flow for Flutter").
+library;
