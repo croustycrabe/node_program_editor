@@ -90,6 +90,12 @@ List<_Item> _nodeItems(
         () => c.groupSelection(),
       ),
     if (isSuper) _Item(Icons.call_split, 'Ungroup', c.ungroupSelection),
+    if (isSuper)
+      _Item(
+        Icons.fork_right,
+        'Make unique copy',
+        () => c.superNodes.detach(c, node.id),
+      ),
     for (final a in extra)
       if (a.isVisible?.call(node) ?? true)
         _Item(a.icon, a.label, () => a.onSelected(c, node)),

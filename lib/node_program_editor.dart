@@ -35,6 +35,7 @@ export 'src/render/node_layer.dart'
     show NodeLayer, NodeSlotBuilder, kNodeHitMargin;
 export 'src/render/shaders.dart' show EditorShaders;
 export 'src/widgets/canvas.dart';
+export 'src/widgets/edge_handles.dart';
 export 'src/widgets/edit_dialogs.dart';
 export 'src/widgets/menus.dart';
 export 'src/widgets/minimap.dart';

@@ -17,6 +17,7 @@ import '../render/grid_painter.dart';
 import '../render/lod_painter.dart';
 import '../render/node_layer.dart';
 import '../render/shaders.dart';
+import 'edge_handles.dart';
 import 'edit_dialogs.dart';
 import 'menus.dart';
 import 'node_render_context.dart';
@@ -583,6 +584,7 @@ class _NodeCanvasState extends State<NodeCanvas> with TickerProviderStateMixin {
                                   ),
                                 ),
                               ),
+                              EdgeWaypointOverlay(controller: _c),
                               NodeMenuOverlay(
                                 controller: _c,
                                 extraActions: widget.nodeMenuActions,

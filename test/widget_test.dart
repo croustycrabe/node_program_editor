@@ -249,4 +249,25 @@ void main() {
     await tester.pumpAndSettle();
     expect(c.scopes.length, 1);
   });
+
+  testWidgets('dragging an edge "+" handle inserts a waypoint', (tester) async {
+    late (NodeInstance, NodeInstance, NodeInstance) chain;
+    final c = await pumpEditor(tester, setup: (c) {
+      chain = buildChain(c);
+      c.setViewport(const EditorViewport(offset: Offset(80, 200)));
+    });
+    await tester.pump();
+    final edge = c.graph.outgoing(chain.$1.id).single;
+    c.selectEdges([edge.id]);
+    await tester.pump();
+    final handle = find.byIcon(Icons.add).last;
+    await tester.drag(handle, const Offset(0, 120));
+    await tester.pump();
+    final updated = c.graph.edge(edge.id)!;
+    expect(updated.waypoints.length, 1);
+    expect(updated.style.pathType, EdgePathType.polyline);
+    await screenshot(tester, _shotKey, 'waypoint');
+    c.undo();
+    expect(c.graph.edge(edge.id)!.waypoints, isEmpty);
+  });
 }
