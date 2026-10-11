@@ -411,6 +411,10 @@ class LogicDocument {
     final inputRedirect = <PortRef, List<PortRef>>{};
     final outputRedirect = <PortRef, PortRef>{};
 
+    // Functions being expanded (guards against recursive definitions in
+    // hand-edited or legacy files: such instances are kept as is).
+    final expanding = <String>{};
+
     void expand(
       List<LogicNode> nodes,
       List<LogicEdge> edges,
@@ -427,7 +431,7 @@ class LogicDocument {
         if (node.type.startsWith(superNodeTypePrefix)) {
           final def =
               superNodes[node.type.substring(superNodeTypePrefix.length)];
-          if (def == null) {
+          if (def == null || expanding.contains(def.id)) {
             outNodes.add(node.copyWith(id: pid(node.id)));
             continue;
           }
@@ -468,7 +472,9 @@ class LogicDocument {
               innerEdges.add(e);
             }
           }
+          expanding.add(def.id);
           expand(innerNodes, innerEdges, innerPrefix, innerIn, innerOut);
+          expanding.remove(def.id);
           // Resolve redirects produced by nested super nodes.
           for (final entry in localIn.entries.toList()) {
             localIn[entry.key] = [

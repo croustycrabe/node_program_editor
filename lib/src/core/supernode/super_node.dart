@@ -234,7 +234,7 @@ class SuperNodeLibrary {
     deletable: false,
     copyable: false,
     resizable: false,
-    showMenu: false,
+    description: 'Edit to add, rename or remove the function ports.',
     style: NodeStyle(headerColor: Color(0xFF455A64)),
   );
 
@@ -246,7 +246,7 @@ class SuperNodeLibrary {
     deletable: false,
     copyable: false,
     resizable: false,
-    showMenu: false,
+    description: 'Edit to add, rename or remove the function ports.',
     style: NodeStyle(headerColor: Color(0xFF455A64)),
   );
 
@@ -300,6 +300,73 @@ class SuperNodeLibrary {
     }
   }
 
+  /// Whether an instance of node [type] placed inside [outer] would make
+  /// [outer] contain itself (directly or through nested functions).
+  bool wouldRecurse(String type, SuperNodeDefinition outer) {
+    final def = definitionOf(type);
+    if (def == null) return false;
+    return identical(def, outer) || usedBy(def.graph.nodes).contains(outer);
+  }
+
+  /// Replaces the exposed ports of [definition].
+  ///
+  /// [inputs] / [outputs] are the function ports as seen from outside
+  /// (keep existing ids to keep their links). Links attached to removed
+  /// ports are deleted, inside the function and on every instance.
+  void setInterface(
+    NodeEditorController controller,
+    SuperNodeDefinition definition, {
+    required List<PortSpec> inputs,
+    required List<PortSpec> outputs,
+  }) {
+    final proxyIn = [
+      for (final p in inputs)
+        PortSpec(
+          id: p.id,
+          direction: PortDirection.output,
+          label: p.label,
+          type: p.type,
+          side: PortSide.right,
+        ),
+    ];
+    final proxyOut = [
+      for (final p in outputs)
+        PortSpec(
+          id: p.id,
+          direction: PortDirection.input,
+          label: p.label,
+          type: p.type,
+          maxLinks: 1,
+          side: PortSide.left,
+        ),
+    ];
+    final g = definition.graph;
+    if (identical(controller.graph, g)) {
+      controller.transaction('Edit function ports', () {
+        controller.setCustomPorts(definition.inputProxy, proxyIn);
+        controller.setCustomPorts(definition.outputProxy, proxyOut);
+      });
+    } else {
+      for (final (id, ports) in [
+        (definition.inputProxy, proxyIn),
+        (definition.outputProxy, proxyOut),
+      ]) {
+        final proxy = g.node(id);
+        if (proxy == null) continue;
+        final keep = {for (final p in ports) p.id};
+        for (final e in g.edgesOfNode(id).toList()) {
+          final port = e.source.node == id ? e.source.port : e.target.port;
+          if (!keep.contains(port)) g.removeEdge(e.id);
+        }
+        proxy
+          ..customPorts = ports
+          ..invalidatePorts()
+          ..size = proxy.definition.clampSize(proxy.size, ports);
+      }
+    }
+    refresh(controller, definition);
+  }
+
   /// Rebinds every instance of [definition] reachable from
   /// [controller]'s scopes (call after changing [SuperNodeDefinition.params]
   /// or its name).
@@ -324,9 +391,22 @@ class SuperNodeLibrary {
       }
     }
     controller.batch(() {
-      for (final n in controller.graph.nodes) {
-        if (n.type == definition.type) {
-          controller.setNodeGeometry(n.id, size: n.size);
+      for (final g in graphs) {
+        for (final n in g.nodes.toList()) {
+          if (n.type != definition.type) continue;
+          // Drop links attached to ports the function no longer exposes.
+          for (final e in g.edgesOfNode(n.id).toList()) {
+            final port = e.source.node == n.id ? e.source.port : e.target.port;
+            if (n.port(port) != null) continue;
+            if (identical(g, controller.graph)) {
+              controller.deleteEdge(e.id);
+            } else {
+              g.removeEdge(e.id);
+            }
+          }
+          if (identical(g, controller.graph)) {
+            controller.setNodeGeometry(n.id, size: n.size);
+          }
         }
       }
     });

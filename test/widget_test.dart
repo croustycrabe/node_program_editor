@@ -347,4 +347,28 @@ void main() {
     expect(c.graph.containsNode(gain.id), isTrue);
     expect(c.history.undoLabel, isNot('Move node'));
   });
+
+  testWidgets('function ports can be edited from the instance dialog', (
+    tester,
+  ) async {
+    late NodeInstance inst;
+    final c = await pumpEditor(
+      tester,
+      setup: (c) {
+        final (_, g, _) = buildChain(c);
+        c.selectNodes([g.id]);
+        inst = c.groupSelection(name: 'Amp')!;
+      },
+    );
+    await tester.pump();
+    c.editNodeHandler!(inst.id);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Function ports'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Add input'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Apply'));
+    await tester.pumpAndSettle();
+    expect(c.graph.node(inst.id)!.ports.where((p) => p.isInput).length, 2);
+  });
 }

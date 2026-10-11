@@ -371,7 +371,7 @@ class _NodeCanvasState extends State<NodeCanvas> with TickerProviderStateMixin {
 
   void _onDrop(DragTargetDetails<NodeDragData> d) {
     final def = _c.registry[d.data.type];
-    if (def == null) return;
+    if (def == null || !_c.canInsertType(d.data.type)) return;
     final pos = _globalToCanvas(d.offset);
     _c.addNode(d.data.type, position: pos, params: d.data.params);
     _focus.requestFocus();
@@ -497,7 +497,8 @@ class _NodeCanvasState extends State<NodeCanvas> with TickerProviderStateMixin {
                   onPointerSignal: _onPointerSignal,
                   child: DragTarget<NodeDragData>(
                     onWillAcceptWithDetails: (d) =>
-                        _c.registry.contains(d.data.type),
+                        _c.registry.contains(d.data.type) &&
+                        _c.canInsertType(d.data.type),
                     onAcceptWithDetails: _onDrop,
                     builder: (context, _, _) => RawGestureDetector(
                       behavior: HitTestBehavior.opaque,

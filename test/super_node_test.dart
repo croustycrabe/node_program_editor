@@ -151,4 +151,112 @@ void main() {
     final n = c2.addNode(def.type, position: Offset.zero);
     expect(n.ports.length, 2);
   });
+
+  test('a function cannot be placed inside itself', () {
+    final c = testController();
+    final (_, g, _) = buildChain(c);
+    c.selectNodes([g.id]);
+    final inner = c.groupSelection(name: 'Inner')!;
+    // Outer contains Inner.
+    c.selectNodes([inner.id]);
+    final outer = c.groupSelection(name: 'Outer')!;
+    final innerType = inner.type;
+
+    expect(c.enterSuperNode(outer.id), isTrue);
+    expect(c.canInsertType(outer.type), isFalse, reason: 'itself');
+    expect(c.canInsertType(innerType), isTrue);
+    expect(
+      () => c.addNode(outer.type, position: Offset.zero),
+      throwsStateError,
+    );
+    final innerInstance = c.graph.nodes.firstWhere((n) => n.type == innerType);
+    expect(c.enterSuperNode(innerInstance.id), isTrue);
+    expect(c.canInsertType(innerType), isFalse, reason: 'itself');
+    expect(c.canInsertType(outer.type), isFalse, reason: 'contains it');
+    expect(c.canInsertType('gain'), isTrue);
+
+    // Pasting an instance of the open function is skipped.
+    c.exitSuperNode(depth: 0);
+    c.selectNodes([outer.id]);
+    final fragment = c.copySelection()!;
+    c.enterSuperNode(outer.id);
+    final before = c.graph.nodeCount;
+    expect(c.pasteFragment(fragment), isEmpty);
+    expect(c.graph.nodeCount, before);
+  });
+
+  test('flatten survives a recursive definition from a file', () {
+    final c = testController();
+    final (_, g, _) = buildChain(c);
+    c.selectNodes([g.id]);
+    final inst = c.groupSelection()!;
+    final def = c.superNodes.definitionOf(inst.type)!;
+    // Bypass the guards like a hand-edited file would.
+    def.graph.addNode(
+      NodeInstance.create(c.registry[inst.type]!, position: Offset.zero),
+    );
+    final flat = c.exportLogic().flatten();
+    expect(flat.nodes.where((n) => n.type == 'gain').length, 1);
+    expect(
+      flat.nodes.where((n) => n.type == inst.type).length,
+      1,
+      reason: 'the recursive instance is kept as an opaque node',
+    );
+  });
+
+  test('function ports can be added, renamed, retyped and removed', () {
+    final c = testController();
+    final (s, g, k) = buildChain(c);
+    c.selectNodes([g.id]);
+    final inst = c.groupSelection(name: 'Amp')!;
+    final def = c.superNodes.definitionOf(inst.type)!;
+    final input = def.inputs.single;
+    final output = def.outputs.single;
+
+    // From outside: rename + retype the input, add one, remove the output.
+    c.superNodes.setInterface(
+      c,
+      def,
+      inputs: [
+        input.copyWith(label: 'signal', type: PortType.signal),
+        const PortSpec.input('in2', label: 'gain', type: PortType.number),
+      ],
+      outputs: const [],
+    );
+    final now = c.graph.node(inst.id)!;
+    expect(now.ports.where((p) => p.isInput).map((p) => p.label), [
+      'signal',
+      'gain',
+    ]);
+    expect(now.ports.where((p) => p.isOutput), isEmpty);
+    expect(
+      c.graph.incoming(inst.id).single.source.node,
+      s.id,
+      reason: 'kept id keeps the link',
+    );
+    expect(
+      c.graph.edgesOfNode(k.id),
+      isEmpty,
+      reason: 'link to the removed output is deleted',
+    );
+    expect(def.graph.edgesOfNode(def.outputProxy), isEmpty);
+
+    // From inside, through the proxy: undoable.
+    c.enterSuperNode(inst.id);
+    c.superNodes.setInterface(
+      c,
+      def,
+      inputs: def.inputs,
+      outputs: [output.copyWith(label: 'result')],
+    );
+    expect(def.outputs.single.label, 'result');
+    c.undo();
+    expect(def.outputs, isEmpty);
+    c.redo();
+    c.exitSuperNode();
+    expect(
+      c.graph.node(inst.id)!.ports.where((p) => p.isOutput).single.label,
+      'result',
+    );
+  });
 }

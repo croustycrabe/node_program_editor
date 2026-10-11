@@ -145,13 +145,18 @@ class _NodePaletteState extends State<NodePalette> {
   Widget build(BuildContext context) {
     final theme = widget.theme ?? NodeEditorThemeData.of(context);
     return ListenableBuilder(
-      listenable: widget.controller.registry,
+      listenable: Listenable.merge([
+        widget.controller.registry,
+        widget.controller.scopeListenable,
+      ]),
       builder: (context, _) {
         final registry = widget.controller.registry;
         final q = _search.text.trim().toLowerCase();
         final scored = <(NodeDefinition, int)>[];
         for (final d in registry.definitions) {
           if (d.category.startsWith('__')) continue;
+          // Inside a function, hide functions that would contain it.
+          if (!widget.controller.canInsertType(d.type)) continue;
           if (widget.filter != null && !widget.filter!(d)) continue;
           if (_category != null && d.category != _category) continue;
           if (_portType != null &&

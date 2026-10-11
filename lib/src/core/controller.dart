@@ -913,6 +913,11 @@ class NodeEditorController extends ChangeNotifier implements GraphMutator {
   }) {
     final def = registry[type];
     if (def == null) throw ArgumentError('Unknown node type "$type"');
+    if (!canInsertType(type)) {
+      throw StateError(
+        'A function cannot contain itself: "${def.title}" is open.',
+      );
+    }
     final node = NodeInstance.create(
       def,
       position: canvasSettings.value.snapOffset(position),
@@ -923,6 +928,17 @@ class NodeEditorController extends ChangeNotifier implements GraphMutator {
     execute(AddElementsCommand(nodes: [node], label: 'Add ${def.title}'));
     if (select) selectNodes([node.id]);
     return node;
+  }
+
+  /// Whether a node of [type] can be added to the current scope. Inside a
+  /// function, instances of that function (or of functions containing it)
+  /// are refused because they would make it contain itself.
+  bool canInsertType(String type) {
+    for (final s in _scopes) {
+      final def = s.superNode;
+      if (def != null && superNodes.wouldRecurse(type, def)) return false;
+    }
+    return true;
   }
 
   /// Adds a node of [type] centered on canvas point [center].
@@ -1658,7 +1674,25 @@ class NodeEditorController extends ChangeNotifier implements GraphMutator {
           Offset(config.pasteOffset, config.pasteOffset) *
           _pasteCount.toDouble();
     }
-    final (nodes, edges) = fragment.instantiate(registry, delta: delta);
+    var (nodes, edges) = fragment.instantiate(registry, delta: delta);
+    // Never paste a function into itself.
+    final refused = {
+      for (final n in nodes)
+        if (!canInsertType(n.type)) n.id,
+    };
+    if (refused.isNotEmpty) {
+      nodes = [
+        for (final n in nodes)
+          if (!refused.contains(n.id)) n,
+      ];
+      edges = [
+        for (final e in edges)
+          if (!refused.contains(e.source.node) &&
+              !refused.contains(e.target.node))
+            e,
+      ];
+    }
+    if (nodes.isEmpty) return const [];
     execute(AddElementsCommand(nodes: nodes, edges: edges, label: 'Paste'));
     selectNodes(nodes.map((n) => n.id));
     return nodes;

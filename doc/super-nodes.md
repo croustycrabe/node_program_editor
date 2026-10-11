@@ -33,6 +33,35 @@ All instances share the definition: editing the interior updates every
 instance. **Make unique copy** (`controller.superNodes.detach(controller, id)`)
 gives one instance its own private copy.
 
+## Inputs and outputs
+
+Edit the ports of a function in either place:
+
+- the instance edit dialog → **Function ports**;
+- inside the function, the edit dialog of the **Inputs** or **Outputs** node
+  (double click it). Changes made there are undoable.
+
+You can add ports, rename them, change their type and remove them. Existing
+ports keep their id, so their links survive renames and type changes. Links
+attached to a removed port are deleted, both inside the function and on every
+instance.
+
+```dart
+controller.superNodes.setInterface(controller, def,
+  inputs: [...def.inputs, const PortSpec.input('gain', label: 'gain', type: PortType.number)],
+  outputs: def.outputs,
+);
+```
+
+## No recursion
+
+A function cannot contain itself, directly or through another function.
+While a function is open, the palette hides those functions, drops and pastes
+of them are refused, and `controller.addNode` throws a `StateError`
+(`controller.canInsertType(type)` tells you in advance). If a hand-edited file
+still contains a recursive definition, `flatten()` keeps the recursive
+instance as an opaque node instead of looping forever.
+
 ## Parameters: exposed or fixed
 
 Open the instance edit dialog → **Function**. Every parameter of every inner

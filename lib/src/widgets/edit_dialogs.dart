@@ -5,6 +5,7 @@ import '../core/controller.dart';
 import '../core/edge.dart';
 import '../core/ids.dart';
 import '../core/node.dart';
+import '../core/ports.dart';
 import '../core/supernode/super_node.dart';
 import '../params/param_types.dart';
 import 'param_editors.dart';
@@ -67,6 +68,19 @@ class _NodeEditDialogState extends State<NodeEditDialog> {
   );
   late final List<ParamBinding> _bindings = [...?_super?.params];
 
+  /// Function edited through this node: the instance's definition, or the
+  /// open function when [node] is one of its Inputs / Outputs proxies.
+  late final SuperNodeDefinition? _function =
+      _super ??
+      (SuperNodeLibrary.isProxy(node)
+          ? widget.controller.scope.superNode
+          : null);
+  late List<PortSpec> _inputs = [...?_function?.inputs];
+  late List<PortSpec> _outputs = [...?_function?.outputs];
+
+  static String _portsKey(List<PortSpec> ports) =>
+      [for (final p in ports) '${p.id}|${p.label}|${p.type.name}'].join(',');
+
   @override
   void dispose() {
     _title.dispose();
@@ -95,6 +109,12 @@ class _NodeEditDialogState extends State<NodeEditDialog> {
         c.setNodeAppearanceOf(node.id, style: style, title: title);
       }
     });
+    final fn = _function;
+    if (fn != null &&
+        (_portsKey(_inputs) != _portsKey(fn.inputs) ||
+            _portsKey(_outputs) != _portsKey(fn.outputs))) {
+      c.superNodes.setInterface(c, fn, inputs: _inputs, outputs: _outputs);
+    }
     final def = _super;
     if (def != null) {
       final name = _superName.text.trim();
@@ -102,8 +122,9 @@ class _NodeEditDialogState extends State<NodeEditDialog> {
         [for (final b in def.params) '${b.node.value}/${b.param}/${b.name}'],
         [for (final b in _bindings) '${b.node.value}/${b.param}/${b.name}'],
       );
-      if (name.isNotEmpty && name != def.name) def.name = name;
-      if (bindingsChanged || name != def.name) {
+      final renamed = name.isNotEmpty && name != def.name;
+      if (renamed) def.name = name;
+      if (bindingsChanged || renamed) {
         c.superNodes.setExposedParams(c, def, _bindings);
       }
     }
@@ -176,6 +197,7 @@ class _NodeEditDialogState extends State<NodeEditDialog> {
                   ),
               ],
               if (_super != null) _superSection(t),
+              if (_function != null) _portsSection(t),
               ExpansionTile(
                 tilePadding: EdgeInsets.zero,
                 title: const Text('Appearance'),
@@ -242,6 +264,40 @@ class _NodeEditDialogState extends State<NodeEditDialog> {
           icon: const Icon(Icons.restart_alt, size: 18),
           onPressed: value == null ? null : () => onChanged(null),
         ),
+      ],
+    );
+  }
+
+  Widget _portsSection(ThemeData t) {
+    final types = widget.controller.registry.portTypes.toList();
+    final proxy = SuperNodeLibrary.isProxy(node);
+    final showInputs = !proxy || node.id == _function!.inputProxy;
+    final showOutputs = !proxy || node.id == _function!.outputProxy;
+    return ExpansionTile(
+      tilePadding: EdgeInsets.zero,
+      initiallyExpanded: proxy,
+      title: const Text('Function ports'),
+      subtitle: const Text(
+        'Add, rename, retype or remove the inputs and outputs of the '
+        'function. Links to removed ports are deleted.',
+      ),
+      children: [
+        if (showInputs)
+          FunctionPortsEditor(
+            title: 'Inputs',
+            direction: PortDirection.input,
+            ports: _inputs,
+            types: types,
+            onChanged: (p) => setState(() => _inputs = p),
+          ),
+        if (showOutputs)
+          FunctionPortsEditor(
+            title: 'Outputs',
+            direction: PortDirection.output,
+            ports: _outputs,
+            types: types,
+            onChanged: (p) => setState(() => _outputs = p),
+          ),
       ],
     );
   }
@@ -632,6 +688,167 @@ class _EdgeEditDialogState extends State<EdgeEditDialog> {
           child: const Text('Apply'),
         ),
       ],
+    );
+  }
+}
+
+/// Editor of a list of function ports (label, type, add, remove). Existing
+/// port ids are kept so their links survive renames and type changes.
+class FunctionPortsEditor extends StatefulWidget {
+  /// Creates the editor.
+  const FunctionPortsEditor({
+    super.key,
+    required this.title,
+    required this.direction,
+    required this.ports,
+    required this.types,
+    required this.onChanged,
+  });
+
+  /// Section title.
+  final String title;
+
+  /// Direction of the ports seen from outside the function.
+  final PortDirection direction;
+
+  /// Current ports.
+  final List<PortSpec> ports;
+
+  /// Selectable port types.
+  final List<PortType> types;
+
+  /// Called with the edited list.
+  final ValueChanged<List<PortSpec>> onChanged;
+
+  @override
+  State<FunctionPortsEditor> createState() => _FunctionPortsEditorState();
+}
+
+class _FunctionPortsEditorState extends State<FunctionPortsEditor> {
+  final Map<String, TextEditingController> _labels = {};
+
+  bool get _isInput => widget.direction == PortDirection.input;
+
+  TextEditingController _label(PortSpec p) =>
+      _labels.putIfAbsent(p.id, () => TextEditingController(text: p.label));
+
+  @override
+  void dispose() {
+    for (final c in _labels.values) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  void _replace(int i, PortSpec p) =>
+      widget.onChanged([...widget.ports]..[i] = p);
+
+  void _add() {
+    final prefix = _isInput ? 'in' : 'out';
+    final ids = {for (final p in widget.ports) p.id};
+    var n = widget.ports.length + 1;
+    while (ids.contains('$prefix$n')) {
+      n++;
+    }
+    widget.onChanged([
+      ...widget.ports,
+      PortSpec(
+        id: '$prefix$n',
+        direction: widget.direction,
+        label: '${_isInput ? 'Input' : 'Output'} $n',
+        maxLinks: _isInput ? 1 : -1,
+      ),
+    ]);
+  }
+
+  Widget _typeItem(PortType type) => Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Container(
+        width: 10,
+        height: 10,
+        decoration: BoxDecoration(color: type.color, shape: BoxShape.circle),
+      ),
+      const SizedBox(width: 6),
+      Text(type.name),
+    ],
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(widget.title, style: t.textTheme.labelLarge),
+          const SizedBox(height: 4),
+          if (widget.ports.isEmpty)
+            Text(
+              'No ${widget.title.toLowerCase()}.',
+              style: t.textTheme.bodySmall,
+            ),
+          for (var i = 0; i < widget.ports.length; i++)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _label(widget.ports[i]),
+                      decoration: const InputDecoration(
+                        isDense: true,
+                        labelText: 'Label',
+                        border: OutlineInputBorder(),
+                      ),
+                      onChanged: (v) =>
+                          _replace(i, widget.ports[i].copyWith(label: v)),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  DropdownButton<String>(
+                    value: widget.ports[i].type.name,
+                    isDense: true,
+                    items: [
+                      for (final type in {
+                        for (final x in widget.types) x.name: x,
+                        widget.ports[i].type.name: widget.ports[i].type,
+                      }.values)
+                        DropdownMenuItem(
+                          value: type.name,
+                          child: _typeItem(type),
+                        ),
+                    ],
+                    onChanged: (name) => _replace(
+                      i,
+                      widget.ports[i].copyWith(
+                        type: widget.types.firstWhere(
+                          (x) => x.name == name,
+                          orElse: () => widget.ports[i].type,
+                        ),
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Remove',
+                    icon: const Icon(Icons.delete_outline, size: 18),
+                    onPressed: () =>
+                        widget.onChanged([...widget.ports]..removeAt(i)),
+                  ),
+                ],
+              ),
+            ),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: _add,
+              icon: const Icon(Icons.add, size: 16),
+              label: Text('Add ${_isInput ? 'input' : 'output'}'),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
