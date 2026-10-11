@@ -233,12 +233,14 @@ void main() {
     test('node notifiers fire only for the changed node', () {
       final c = testController();
       final (s, g, _) = buildChain(c);
-      var sCount = 0, gCount = 0;
+      var sCount = 0, gCount = 0, sMoves = 0;
       c.nodeListenable(s.id).addListener(() => sCount++);
       c.nodeListenable(g.id).addListener(() => gCount++);
+      c.nodePositionListenable(s.id).addListener(() => sMoves++);
       c.setParam(s.id, 'value', 1.0);
       c.moveNodes({s.id: const Offset(5, 5)});
-      expect(sCount, 2);
+      expect(sCount, 1, reason: 'moving does not rebuild node content');
+      expect(sMoves, 1);
       expect(gCount, 0);
       c.selectNodes([g.id]);
       expect(gCount, 1);
@@ -269,9 +271,9 @@ void main() {
     });
   });
 
-  group('Viewport', () {
+  group('EditorViewport', () {
     test('zoom around focal keeps point fixed', () {
-      const v = Viewport(offset: Offset(100, 50), zoom: 1);
+      const v = EditorViewport(offset: Offset(100, 50), zoom: 1);
       final c = v.toCanvas(const Offset(400, 300));
       final z = v.zoomAround(const Offset(400, 300), 2);
       expect(z.toScreen(c), const Offset(400, 300));

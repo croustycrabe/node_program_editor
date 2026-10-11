@@ -28,4 +28,21 @@ export 'src/core/validation.dart';
 export 'src/core/viewport.dart';
 export 'src/params/param_types.dart';
 export 'src/params/param_values.dart';
+export 'src/interaction/shortcuts.dart';
+export 'src/render/edge_painter.dart'
+    show EdgeRenderCache, EdgeStyleResolver, paintEdgeMarker;
+export 'src/render/node_layer.dart'
+    show NodeLayer, NodeSlotBuilder, kNodeHitMargin;
+export 'src/render/shaders.dart' show EditorShaders;
+export 'src/widgets/canvas.dart';
+export 'src/widgets/edit_dialogs.dart';
+export 'src/widgets/menus.dart';
+export 'src/widgets/minimap.dart';
+export 'src/widgets/node_editor.dart';
 export 'src/widgets/node_render_context.dart';
+export 'src/widgets/node_widget.dart';
+export 'src/widgets/palette.dart';
+export 'src/widgets/param_editors.dart';
+export 'src/widgets/scope.dart';
+export 'src/widgets/theme.dart';
+export 'src/widgets/toolbar.dart';

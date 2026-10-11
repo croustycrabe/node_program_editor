@@ -159,6 +159,7 @@ class NodeDefinition {
     this.style,
     this.portLayout = const PortLayout(),
     this.builder,
+    this.portBuilder,
   });
 
   /// Unique type id, stored in the logic file.
@@ -216,8 +217,12 @@ class NodeDefinition {
   /// Port placement rules for the built-in layout.
   final PortLayout portLayout;
 
-  /// Custom widget builder replacing the built-in node widget.
+  /// Custom widget builder replacing the built-in node body. Ports,
+  /// selection outline and resize handles are still drawn around it.
   final NodeWidgetBuilder? builder;
+
+  /// Custom port visual for this node type (see [PortRenderContext]).
+  final PortWidgetBuilder? portBuilder;
 
   /// Input ports.
   Iterable<PortSpec> get inputs => ports.where((p) => p.isInput);

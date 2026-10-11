@@ -21,6 +21,7 @@ class Graph {
   final LinkedHashMap<EdgeId, Edge> _edges = LinkedHashMap();
   final Map<NodeId, Set<EdgeId>> _nodeEdges = {};
   final Map<PortRef, Set<EdgeId>> _portEdges = {};
+  Map<NodeId, int>? _zIndex;
 
   /// Nodes in z-order (bottom first).
   Iterable<NodeInstance> get nodes => _nodes.values;
@@ -79,17 +80,14 @@ class Graph {
 
   /// The z-index of node [id] (0 = bottom), -1 if absent.
   int indexOfNode(NodeId id) {
-    var i = 0;
-    for (final k in _nodes.keys) {
-      if (k == id) return i;
-      i++;
-    }
-    return -1;
+    final z = _zIndex ??= {for (final (i, k) in _nodes.keys.indexed) k: i};
+    return z[id] ?? -1;
   }
 
   /// Adds [node]. When [index] is given the node is inserted at that
   /// z-index (used by undo to restore order).
   void addNode(NodeInstance node, {int? index}) {
+    _zIndex = null;
     if (index == null || index >= _nodes.length) {
       _nodes[node.id] = node;
     } else {
@@ -111,6 +109,7 @@ class Graph {
       if (edge != null) removed.add(edge);
     }
     _nodes.remove(id);
+    _zIndex = null;
     _nodeEdges.remove(id);
     return removed;
   }
@@ -158,6 +157,7 @@ class Graph {
 
   /// Moves node [id] to the top of the z-order.
   void bringToFront(NodeId id) {
+    _zIndex = null;
     final node = _nodes.remove(id);
     if (node != null) _nodes[id] = node;
   }
@@ -209,6 +209,7 @@ class Graph {
 
   /// Removes everything.
   void clear() {
+    _zIndex = null;
     _nodes.clear();
     _edges.clear();
     _nodeEdges.clear();

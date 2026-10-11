@@ -9,9 +9,9 @@ import 'json.dart';
 
 /// Pan / zoom state: `screen = canvas * zoom + offset`.
 @immutable
-class Viewport {
+class EditorViewport {
   /// Creates a viewport.
-  const Viewport({this.offset = Offset.zero, this.zoom = 1});
+  const EditorViewport({this.offset = Offset.zero, this.zoom = 1});
 
   /// Screen position of the canvas origin, logical pixels.
   final Offset offset;
@@ -41,14 +41,14 @@ class Viewport {
     ..scaleByDouble(zoom, zoom, 1, 1);
 
   /// Returns a copy with the given fields replaced.
-  Viewport copyWith({Offset? offset, double? zoom}) =>
-      Viewport(offset: offset ?? this.offset, zoom: zoom ?? this.zoom);
+  EditorViewport copyWith({Offset? offset, double? zoom}) =>
+      EditorViewport(offset: offset ?? this.offset, zoom: zoom ?? this.zoom);
 
   /// Zooms to [newZoom] keeping the canvas point under [focal] (screen)
   /// fixed.
-  Viewport zoomAround(Offset focal, double newZoom) {
+  EditorViewport zoomAround(Offset focal, double newZoom) {
     final c = toCanvas(focal);
-    return Viewport(offset: focal - c * newZoom, zoom: newZoom);
+    return EditorViewport(offset: focal - c * newZoom, zoom: newZoom);
   }
 
   /// Serializes to JSON.
@@ -59,20 +59,20 @@ class Viewport {
   };
 
   /// Parses JSON produced by [toJson].
-  factory Viewport.fromJson(Map<String, Object?> json) => Viewport(
+  factory EditorViewport.fromJson(Map<String, Object?> json) => EditorViewport(
     offset: Offset(readDouble(json['x']) ?? 0, readDouble(json['y']) ?? 0),
     zoom: readDouble(json['zoom']) ?? 1,
   );
 
   @override
   bool operator ==(Object other) =>
-      other is Viewport && other.offset == offset && other.zoom == zoom;
+      other is EditorViewport && other.offset == offset && other.zoom == zoom;
 
   @override
   int get hashCode => Object.hash(offset, zoom);
 
   @override
-  String toString() => 'Viewport($offset, x$zoom)';
+  String toString() => 'EditorViewport($offset, x$zoom)';
 }
 
 /// The current selection. Immutable; the controller publishes a new instance

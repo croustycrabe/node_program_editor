@@ -130,7 +130,7 @@ class GraphDesign {
 class DesignDocument {
   /// Creates a design document.
   DesignDocument({
-    this.viewport = const Viewport(),
+    this.viewport = const EditorViewport(),
     this.canvas = const CanvasSettings(),
     GraphDesign? graph,
     Map<String, GraphDesign>? superNodes,
@@ -148,7 +148,7 @@ class DesignDocument {
   final int schemaVersion;
 
   /// Saved viewport.
-  final Viewport viewport;
+  final EditorViewport viewport;
 
   /// Grid and snapping settings.
   final CanvasSettings canvas;
@@ -180,8 +180,8 @@ class DesignDocument {
   factory DesignDocument.fromJson(Map<String, Object?> json) => DesignDocument(
     schemaVersion: readInt(json['schemaVersion']) ?? 1,
     viewport: json['viewport'] == null
-        ? const Viewport()
-        : Viewport.fromJson(asJsonMap(json['viewport'])),
+        ? const EditorViewport()
+        : EditorViewport.fromJson(asJsonMap(json['viewport'])),
     canvas: json['canvas'] == null
         ? const CanvasSettings()
         : CanvasSettings.fromJson(asJsonMap(json['canvas'])),

@@ -99,7 +99,7 @@ void main() {
         gridStyle: GridStyle.lines,
         snapToGrid: true,
       );
-      c.setViewport(const Viewport(offset: Offset(12, 34), zoom: 0.8));
+      c.setViewport(const EditorViewport(offset: Offset(12, 34), zoom: 0.8));
 
       final logicJson = c.exportLogic().toJsonString();
       final designJson = c.exportDesign().toJsonString();
@@ -136,7 +136,7 @@ void main() {
       expect(c2.canvasSettings.value.gridStyle, GridStyle.lines);
       expect(
         c2.viewport.value,
-        const Viewport(offset: Offset(12, 34), zoom: 0.8),
+        const EditorViewport(offset: Offset(12, 34), zoom: 0.8),
       );
       expect(c2.exportLogic().toJsonString(), logicJson);
     });

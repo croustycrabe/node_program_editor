@@ -22,6 +22,27 @@ import 'supernode/super_node.dart';
 import 'validation.dart';
 import 'viewport.dart';
 
+/// Alignment targets of [NodeEditorController.alignSelection].
+enum NodeAlignment {
+  /// Left edges.
+  left,
+
+  /// Horizontal centers.
+  centerHorizontal,
+
+  /// Right edges.
+  right,
+
+  /// Top edges.
+  top,
+
+  /// Vertical centers.
+  centerVertical,
+
+  /// Bottom edges.
+  bottom,
+}
+
 /// A link being dragged from a port.
 @immutable
 class ConnectionDraft {
@@ -104,8 +125,8 @@ class EditorScope {
   /// Undo history of this scope.
   final HistoryStack history;
 
-  /// Viewport to restore when coming back to this scope.
-  Viewport savedViewport = const Viewport();
+  /// EditorViewport to restore when coming back to this scope.
+  EditorViewport savedViewport = const EditorViewport();
 }
 
 class _Notifier extends ChangeNotifier {
@@ -134,7 +155,7 @@ class NodeEditorController extends ChangeNotifier implements GraphMutator {
     NodeEditorConfig config = const NodeEditorConfig(),
     this.validator = const ConnectionValidator(),
     CanvasSettings canvasSettings = const CanvasSettings(),
-    Viewport viewport = const Viewport(),
+    EditorViewport viewport = const EditorViewport(),
   }) : registry = registry ?? NodeRegistry(),
        // ignore: prefer_initializing_formals
        _config = config,
@@ -167,10 +188,16 @@ class NodeEditorController extends ChangeNotifier implements GraphMutator {
   final ValueNotifier<CanvasSettings> canvasSettings;
 
   /// Pan / zoom state.
-  final ValueNotifier<Viewport> viewport;
+  final ValueNotifier<EditorViewport> viewport;
 
-  /// Size of the canvas widget (set by the canvas).
-  Size viewportSize = const Size(800, 600);
+  final ValueNotifier<Size> _viewportSize = ValueNotifier(const Size(800, 600));
+
+  /// Size of the canvas widget (set by the canvas after layout).
+  Size get viewportSize => _viewportSize.value;
+  set viewportSize(Size value) => _viewportSize.value = value;
+
+  /// Fires when the canvas is resized.
+  ValueListenable<Size> get viewportSizeListenable => _viewportSize;
 
   final ValueNotifier<GraphSelection> _selection = ValueNotifier(
     GraphSelection.empty,
@@ -227,7 +254,7 @@ class NodeEditorController extends ChangeNotifier implements GraphMutator {
   void Function(EdgeId id)? editEdgeHandler;
 
   /// Animates the viewport; installed by the canvas.
-  void Function(Viewport target, Duration duration)? viewportAnimator;
+  void Function(EditorViewport target, Duration duration)? viewportAnimator;
 
   final List<EditorScope> _scopes = [];
 
@@ -261,6 +288,17 @@ class NodeEditorController extends ChangeNotifier implements GraphMutator {
   final Map<String, EdgePathBuilder> _edgePathBuilders = {};
   final Map<EdgeId, _EdgeGeometryEntry> _edgeGeometry = {};
   final Map<NodeId, _Notifier> _nodeNotifiers = {};
+  final Map<NodeId, _Notifier> _nodePositionNotifiers = {};
+
+  int _renderStamp = 0;
+  int _animatedEdges = 0;
+
+  /// Number of animated edges in the current graph.
+  int get animatedEdgeCount => _animatedEdges;
+
+  /// Changes whenever something affecting the rendering of non-selected
+  /// nodes changes (used by low-detail renderers to cache vertex buffers).
+  int get renderStamp => _renderStamp;
 
   final _Notifier _structure = _Notifier();
   final _Notifier _geometry = _Notifier();
@@ -280,9 +318,14 @@ class NodeEditorController extends ChangeNotifier implements GraphMutator {
   /// flags).
   ValueListenable<int> get revision => _revision;
 
-  /// A listenable for one node (position, size, params, selection, lock).
+  /// A listenable for the content of one node (size, params, selection,
+  /// lock, style). Position-only changes do not fire it.
   Listenable nodeListenable(NodeId id) =>
       _nodeNotifiers.putIfAbsent(id, _Notifier.new);
+
+  /// A listenable firing when node [id] moves or is resized.
+  Listenable nodePositionListenable(NodeId id) =>
+      _nodePositionNotifiers.putIfAbsent(id, _Notifier.new);
 
   // ---------------------------------------------------------------------
   // Batching
@@ -294,6 +337,7 @@ class NodeEditorController extends ChangeNotifier implements GraphMutator {
   bool _dirtyEdges = false;
   bool _dirtyDocument = false;
   final Set<NodeId> _dirtyNodes = {};
+  final Set<NodeId> _dirtyPositions = {};
 
   /// Runs [fn] and coalesces all notifications it triggers into one.
   T batch<T>(T Function() fn) {
@@ -307,6 +351,13 @@ class NodeEditorController extends ChangeNotifier implements GraphMutator {
   }
 
   void _flush() {
+    if (_dirtyPositions.isNotEmpty) {
+      final nodes = List.of(_dirtyPositions);
+      _dirtyPositions.clear();
+      for (final id in nodes) {
+        _nodePositionNotifiers[id]?.notify();
+      }
+    }
     if (_dirtyNodes.isNotEmpty) {
       final nodes = List.of(_dirtyNodes);
       _dirtyNodes.clear();
@@ -330,6 +381,11 @@ class NodeEditorController extends ChangeNotifier implements GraphMutator {
       _dirtyDocument = false;
       _revision.value++;
     }
+  }
+
+  void _touchPosition(NodeId id) {
+    _dirtyPositions.add(id);
+    if (_batchDepth == 0) _flush();
   }
 
   void _touchNode(NodeId id) {
@@ -366,6 +422,7 @@ class NodeEditorController extends ChangeNotifier implements GraphMutator {
 
   @override
   void insertNode(NodeInstance node, {int? index}) {
+    _renderStamp++;
     assert(!graph.containsNode(node.id), 'Duplicate node id ${node.id}');
     graph.addNode(node, index: index);
     nodeIndex.insert(node.id, node.rect);
@@ -375,11 +432,15 @@ class NodeEditorController extends ChangeNotifier implements GraphMutator {
 
   @override
   void deleteNode(NodeId id) {
+    _renderStamp++;
     for (final e in graph.removeNode(id)) {
+      if (e.style.animated) _animatedEdges--;
       _forgetEdge(e.id);
+      _touchNode(e.source.node == id ? e.target.node : e.source.node);
     }
     nodeIndex.remove(id);
     _nodeNotifiers.remove(id);
+    _nodePositionNotifiers.remove(id);
     if (_selection.value.nodes.contains(id)) {
       _selection.value = GraphSelection(
         nodes: {..._selection.value.nodes}..remove(id),
@@ -395,13 +456,20 @@ class NodeEditorController extends ChangeNotifier implements GraphMutator {
   void insertEdge(Edge edge) {
     graph.addEdge(edge);
     _indexEdge(edge);
+    if (edge.style.animated) _animatedEdges++;
+    _touchNode(edge.source.node);
+    _touchNode(edge.target.node);
     _markEdges();
   }
 
   @override
   void deleteEdge(EdgeId id) {
-    if (graph.removeEdge(id) != null) {
+    final edge = graph.removeEdge(id);
+    if (edge != null) {
+      if (edge.style.animated) _animatedEdges--;
       _forgetEdge(id);
+      _touchNode(edge.source.node);
+      _touchNode(edge.target.node);
       _markEdges();
     }
   }
@@ -420,6 +488,9 @@ class NodeEditorController extends ChangeNotifier implements GraphMutator {
 
   @override
   void replaceEdge(Edge edge) {
+    final old = graph.edge(edge.id);
+    if (old != null && old.style.animated) _animatedEdges--;
+    if (edge.style.animated) _animatedEdges++;
     graph.replaceEdge(edge);
     _indexEdge(edge);
     _markEdges();
@@ -429,13 +500,16 @@ class NodeEditorController extends ChangeNotifier implements GraphMutator {
   void setNodeGeometry(NodeId id, {Offset? position, Size? size}) {
     final node = graph.node(id);
     if (node == null) return;
+    if (!_selection.value.nodes.contains(id)) _renderStamp++;
+    final resized = size != null && size != node.size;
     if (position != null) node.position = position;
     if (size != null) node.size = size;
     nodeIndex.insert(id, node.rect);
     for (final e in graph.edgesOfNode(id)) {
       _indexEdge(e);
     }
-    _touchNode(id);
+    _touchPosition(id);
+    if (resized) _touchNode(id);
     _markGeometry();
     if (graph.edgeIdsOfNode(id).isNotEmpty) _markEdges();
   }
@@ -460,6 +534,7 @@ class NodeEditorController extends ChangeNotifier implements GraphMutator {
 
   @override
   void setNodeAppearance(NodeId id, {NodeStyle? style, String? title}) {
+    _renderStamp++;
     final node = graph.node(id);
     if (node == null) return;
     node
@@ -471,12 +546,14 @@ class NodeEditorController extends ChangeNotifier implements GraphMutator {
 
   @override
   void setNodeCustomPorts(NodeId id, List<PortSpec> ports) {
+    _renderStamp++;
     final node = graph.node(id);
     if (node == null) return;
     node
       ..customPorts = ports
       ..invalidatePorts();
     node.size = node.definition.clampSize(node.size, ports);
+    _touchPosition(id);
     nodeIndex.insert(id, node.rect);
     for (final e in graph.edgesOfNode(id)) {
       _indexEdge(e);
@@ -651,8 +728,10 @@ class NodeEditorController extends ChangeNotifier implements GraphMutator {
     for (final n in graph.nodes) {
       nodeIndex.insert(n.id, n.rect);
     }
+    _animatedEdges = 0;
     for (final e in graph.edges) {
       _indexEdge(e);
+      if (e.style.animated) _animatedEdges++;
     }
   }
 
@@ -898,6 +977,67 @@ class NodeEditorController extends ChangeNotifier implements GraphMutator {
     });
   }
 
+  /// Aligns the selected, unlocked nodes.
+  void alignSelection(NodeAlignment alignment) {
+    final nodes = [
+      for (final id in _selection.value.nodes)
+        if (graph.node(id) case final n? when !n.locked) n,
+    ];
+    if (nodes.length < 2) return;
+    final b = boundsOf(nodes.map((n) => n.id))!;
+    moveNodes({
+      for (final n in nodes)
+        n.id: switch (alignment) {
+          NodeAlignment.left => Offset(b.left, n.position.dy),
+          NodeAlignment.centerHorizontal => Offset(
+            b.center.dx - n.size.width / 2,
+            n.position.dy,
+          ),
+          NodeAlignment.right => Offset(b.right - n.size.width, n.position.dy),
+          NodeAlignment.top => Offset(n.position.dx, b.top),
+          NodeAlignment.centerVertical => Offset(
+            n.position.dx,
+            b.center.dy - n.size.height / 2,
+          ),
+          NodeAlignment.bottom => Offset(
+            n.position.dx,
+            b.bottom - n.size.height,
+          ),
+        },
+    });
+  }
+
+  /// Spreads the selected, unlocked nodes evenly along [horizontal] or
+  /// vertical axis (equal gaps).
+  void distributeSelection({bool horizontal = true}) {
+    final nodes = [
+      for (final id in _selection.value.nodes)
+        if (graph.node(id) case final n? when !n.locked) n,
+    ];
+    if (nodes.length < 3) return;
+    nodes.sort(
+      (a, b) => horizontal
+          ? a.position.dx.compareTo(b.position.dx)
+          : a.position.dy.compareTo(b.position.dy),
+    );
+    final b = boundsOf(nodes.map((n) => n.id))!;
+    final total = nodes.fold<double>(
+      0,
+      (s, n) => s + (horizontal ? n.size.width : n.size.height),
+    );
+    final gap =
+        ((horizontal ? b.width : b.height) - total) / (nodes.length - 1);
+    var cursor = horizontal ? b.left : b.top;
+    final positions = <NodeId, Offset>{};
+    for (final n in nodes) {
+      positions[n.id] = horizontal
+          ? Offset(cursor, n.position.dy)
+          : Offset(n.position.dx, cursor);
+      cursor += (horizontal ? n.size.width : n.size.height) + gap;
+    }
+    moveNodes(positions);
+  }
+
   /// Sets the rect of node [id] (clamped to its definition limits).
   void setNodeRect(NodeId id, Rect rect) {
     final n = graph.node(id);
@@ -1008,6 +1148,7 @@ class NodeEditorController extends ChangeNotifier implements GraphMutator {
 
   /// Moves node [id] on top of the others (not recorded in history).
   void bringToFront(NodeId id) {
+    _renderStamp++;
     if (!graph.containsNode(id)) return;
     if (graph.nodes.isNotEmpty && graph.nodes.last.id == id) return;
     graph.bringToFront(id);
@@ -1025,6 +1166,7 @@ class NodeEditorController extends ChangeNotifier implements GraphMutator {
         setEquals(old.edges, value.edges)) {
       return;
     }
+    _renderStamp++;
     batch(() {
       for (final id in old.nodes.difference(value.nodes)) {
         _touchNode(id);
@@ -1093,15 +1235,15 @@ class NodeEditorController extends ChangeNotifier implements GraphMutator {
   bool isEdgeSelected(EdgeId id) => _selection.value.edges.contains(id);
 
   // ---------------------------------------------------------------------
-  // Viewport
+  // EditorViewport
   // ---------------------------------------------------------------------
 
   /// Sets the viewport (clamped to zoom limits and translate extent).
-  void setViewport(Viewport v) {
+  void setViewport(EditorViewport v) {
     viewport.value = _clampViewport(v);
   }
 
-  Viewport _clampViewport(Viewport v) {
+  EditorViewport _clampViewport(EditorViewport v) {
     final zoom = v.zoom.clamp(config.minZoom, config.maxZoom);
     var offset = v.offset;
     final extent = config.translateExtent;
@@ -1115,7 +1257,7 @@ class NodeEditorController extends ChangeNotifier implements GraphMutator {
         minY > maxY ? (minY + maxY) / 2 : offset.dy.clamp(minY, maxY),
       );
     }
-    return Viewport(offset: offset, zoom: zoom);
+    return EditorViewport(offset: offset, zoom: zoom);
   }
 
   /// Pans by [delta] screen pixels.
@@ -1150,7 +1292,10 @@ class NodeEditorController extends ChangeNotifier implements GraphMutator {
       config.maxZoom,
     );
     _goTo(
-      Viewport(offset: viewportSize.center(Offset.zero) - point * z, zoom: z),
+      EditorViewport(
+        offset: viewportSize.center(Offset.zero) - point * z,
+        zoom: z,
+      ),
       animate,
     );
   }
@@ -1171,7 +1316,7 @@ class NodeEditorController extends ChangeNotifier implements GraphMutator {
         .clamp(config.minZoom, math.min(maxZoom ?? 1.5, config.maxZoom))
         .toDouble();
     _goTo(
-      Viewport(
+      EditorViewport(
         offset: viewportSize.center(Offset.zero) - b.center * z,
         zoom: z,
       ),
@@ -1179,7 +1324,7 @@ class NodeEditorController extends ChangeNotifier implements GraphMutator {
     );
   }
 
-  void _goTo(Viewport target, bool animate) {
+  void _goTo(EditorViewport target, bool animate) {
     final t = _clampViewport(target);
     if (animate && viewportAnimator != null) {
       viewportAnimator!(t, const Duration(milliseconds: 260));
@@ -1462,6 +1607,7 @@ class NodeEditorController extends ChangeNotifier implements GraphMutator {
   }
 
   void _onScopeChanged() {
+    _renderStamp++;
     cancelConnection();
     endMarquee();
     menuNode.value = null;
@@ -1562,6 +1708,7 @@ class NodeEditorController extends ChangeNotifier implements GraphMutator {
       n.dispose();
     }
     _revision.dispose();
+    _viewportSize.dispose();
     _selection.dispose();
     connectionDraft.dispose();
     connectionPointer.dispose();
