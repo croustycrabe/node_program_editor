@@ -52,6 +52,12 @@ float coverage(vec2 d, float thickness) {
 
 void main() {
   vec2 p = FlutterFragCoord().xy;
+  // Every uniform must be used, otherwise the compiler may strip it and
+  // shift the indices written by the Dart side.
+  if (p.x > uSize.x || p.y > uSize.y) {
+    fragColor = vec4(0.0);
+    return;
+  }
   vec2 c = (p - uOffset) / uZoom;
 
   // Double the spacing until cells are at least 8px on screen so dense
