@@ -20,6 +20,7 @@ class ShowcasePage extends StatelessWidget {
     this.sidePanel,
     this.overlays = const [],
     this.paletteLayout = NodePaletteLayout.list,
+    this.canvasMenuActions,
   });
 
   final String title;
@@ -34,6 +35,7 @@ class ShowcasePage extends StatelessWidget {
   final Widget? sidePanel;
   final List<Widget> overlays;
   final NodePaletteLayout paletteLayout;
+  final List<CanvasMenuAction>? canvasMenuActions;
 
   @override
   Widget build(BuildContext context) {
@@ -84,6 +86,7 @@ class ShowcasePage extends StatelessWidget {
                   customToolbarItems: toolbarItems,
                   nodeMenuActions: nodeMenuActions,
                   paletteLayout: paletteLayout,
+                  canvasMenuActions: canvasMenuActions,
                   overlays: overlays,
                   onSave: (c) => showExportDialog(context, c, fileStem),
                 ),

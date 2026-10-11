@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:ui' as ui;
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -370,5 +371,112 @@ void main() {
     await tester.tap(find.text('Apply'));
     await tester.pumpAndSettle();
     expect(c.graph.node(inst.id)!.ports.where((p) => p.isInput).length, 2);
+  });
+
+  testWidgets('right drag draws a selection box, right click opens the menu', (
+    tester,
+  ) async {
+    final c = await pumpEditor(
+      tester,
+      setup: (c) {
+        buildChain(c);
+        c.setViewport(const EditorViewport(offset: Offset(80, 200)));
+      },
+    );
+    await tester.pump();
+    final box = tester.getTopLeft(find.byType(NodeCanvas));
+
+    final drag = await tester.startGesture(
+      box + const Offset(40, 150),
+      kind: PointerDeviceKind.mouse,
+      buttons: kSecondaryMouseButton,
+    );
+    await drag.moveBy(const Offset(30, 30));
+    await tester.pump();
+    await drag.moveTo(box + const Offset(560, 500));
+    await tester.pump();
+    expect(c.marquee.value, isNotNull);
+    await drag.up();
+    await tester.pump();
+    expect(c.selection.value.nodes.length, 2);
+    expect(find.text('Add node…'), findsNothing, reason: 'drag, not a click');
+
+    final before = c.viewport.value;
+    await tester.tapAt(
+      box + const Offset(600, 650),
+      kind: PointerDeviceKind.mouse,
+      buttons: kSecondaryMouseButton,
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Add node…'), findsOneWidget);
+    expect(find.text('Paste here'), findsOneWidget);
+    await tester.tap(find.text('Fit view'));
+    await tester.pumpAndSettle();
+    expect(c.viewport.value, isNot(before));
+
+    // Quick add places the node where the user clicked.
+    await tester.tapAt(
+      box + const Offset(600, 650),
+      kind: PointerDeviceKind.mouse,
+      buttons: kSecondaryMouseButton,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Add node…'));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.text('Sink'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(c.graph.nodes.where((n) => n.type == 'sink').length, 2);
+
+    c.config = c.config.copyWith(secondaryDrag: SecondaryDrag.pan);
+    final v = c.viewport.value;
+    await tester.dragFrom(
+      box + const Offset(600, 650),
+      const Offset(-100, 0),
+      kind: PointerDeviceKind.mouse,
+      buttons: kSecondaryMouseButton,
+    );
+    await tester.pump();
+    expect(c.viewport.value.offset.dx, lessThan(v.offset.dx - 50));
+  });
+
+  testWidgets('canvas menu entries are customizable', (tester) async {
+    tester.view.physicalSize = const Size(1200, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final c = testController();
+    var hits = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: NodeCanvas(
+            controller: c,
+            canvasMenuActions: [
+              CanvasMenuAction(
+                icon: Icons.star,
+                label: 'My action',
+                onSelected: (context, c, pos) => hits++,
+              ),
+              CanvasMenuAction.fitView,
+            ],
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.tapAt(
+      const Offset(300, 300),
+      kind: PointerDeviceKind.mouse,
+      buttons: kSecondaryMouseButton,
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Add node…'), findsNothing);
+    await tester.tap(find.text('My action'));
+    await tester.pumpAndSettle();
+    expect(hits, 1);
   });
 }

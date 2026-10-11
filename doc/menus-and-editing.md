@@ -64,12 +64,39 @@ and waypoints with a live preview, recorded as one undo step.
 
 ## Canvas context menu
 
-The canvas does not show a menu for empty space; handle it yourself (for
-example a quick "add node" search):
+A right click on empty canvas opens a menu. The default entries
+(`CanvasMenuAction.defaults`) are **Add node…** (searchable list, the node is
+placed where you clicked), **Paste here**, **Select all**, **Fit view**,
+**Auto layout**, **Undo** and **Leave function** (inside a function).
+
+Choose the entries:
 
 ```dart
-controller.onCanvasContextMenu = (canvasPos, globalPos) async {
-  final type = await showMyNodePicker(context, globalPos);
-  if (type != null) controller.addNode(type, position: canvasPos);
-};
+NodeEditor(
+  controller: controller,
+  canvasMenuActions: [
+    CanvasMenuAction(
+      icon: Icons.play_arrow,
+      label: 'Run',
+      isEnabled: (c) => c.graph.nodeCount > 0,
+      onSelected: (context, c, canvasPos) => engine.run(c.exportLogic()),
+    ),
+    CanvasMenuAction.addNode,
+    CanvasMenuAction.paste,
+  ],
+)
 ```
+
+An empty list disables the menu. To show something completely different,
+set `controller.onCanvasContextMenu = (canvasPos, globalPos) { ... }`; it
+replaces the menu. `showCanvasContextMenu(...)` and `showQuickAddDialog(...)`
+are public if you want to open them yourself.
+
+### Browser context menu (web)
+
+On the web, the browser shows its own menu on right click, on top of the
+editor's. `NodeCanvas` / `NodeEditor` disable it while they are mounted
+(`disableBrowserContextMenu: true`, the default) and restore it when the last
+canvas is disposed. Note that this applies to the whole page while the editor
+is shown, including the native copy / paste menu of text fields. Pass
+`false` to keep the browser menu.

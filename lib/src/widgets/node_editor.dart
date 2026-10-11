@@ -53,6 +53,8 @@ class NodeEditor extends StatelessWidget {
     this.edgeMenuActions = const [],
     this.overlays = const [],
     this.useShaders = true,
+    this.canvasMenuActions,
+    this.disableBrowserContextMenu = true,
   });
 
   /// Controller.
@@ -124,6 +126,12 @@ class NodeEditor extends StatelessWidget {
   /// See [NodeCanvas.useShaders].
   final bool useShaders;
 
+  /// See [NodeCanvas.canvasMenuActions].
+  final List<CanvasMenuAction>? canvasMenuActions;
+
+  /// See [NodeCanvas.disableBrowserContextMenu].
+  final bool disableBrowserContextMenu;
+
   @override
   Widget build(BuildContext context) {
     final theme = this.theme ?? NodeEditorThemeData.of(context);
@@ -136,6 +144,8 @@ class NodeEditor extends StatelessWidget {
       nodeMenuActions: nodeMenuActions,
       edgeMenuActions: edgeMenuActions,
       useShaders: useShaders,
+      canvasMenuActions: canvasMenuActions,
+      disableBrowserContextMenu: disableBrowserContextMenu,
       overlays: [
         if (showToolbar)
           Positioned(

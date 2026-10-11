@@ -242,6 +242,21 @@ class _AutomationPageState extends State<AutomationPage> {
       controller: c,
       fileStem: 'workflow',
       nodeMenuActions: _menuActions,
+      // Right click on empty canvas: the default entries + our own.
+      canvasMenuActions: [
+        CanvasMenuAction(
+          icon: Icons.play_arrow,
+          label: 'Execute workflow',
+          isEnabled: (_) => !_running,
+          onSelected: (context, c, pos) => _run(),
+        ),
+        CanvasMenuAction(
+          icon: Icons.restart_alt,
+          label: 'Reset run results',
+          onSelected: (context, c, pos) => c.clearRuntime(),
+        ),
+        ...CanvasMenuAction.defaults,
+      ],
       actions: [
         FilledButton.icon(
           onPressed: _running ? null : _run,

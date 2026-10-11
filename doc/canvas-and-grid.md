@@ -17,6 +17,8 @@ NodeCanvas(
   onEditEdge: null,                  // replace the edge edit dialog
   autofocus: true,
   useShaders: true,
+  canvasMenuActions: null,           // right click menu (null = defaults)
+  disableBrowserContextMenu: true,   // web: hide the browser's own menu
 )
 ```
 
@@ -54,6 +56,7 @@ controller.config = const NodeEditorConfig(
   edgesSelectable: true,
   deletable: true,
   panOnDrag: PanOnDrag.pan,          // or PanOnDrag.select
+  secondaryDrag: SecondaryDrag.select, // right drag: select, pan or none
   zoomOnScroll: true,                // false: wheel pans, Ctrl+wheel zooms
   zoomOnPinch: true,
   minZoom: 0.05, maxZoom: 4, zoomStep: 1.2,
@@ -82,6 +85,7 @@ controller.config = const NodeEditorConfig(
 | Drag on empty canvas | pan (or selection box with `PanOnDrag.select`) |
 | Shift + drag | selection box (or pan with `PanOnDrag.select`) |
 | Ctrl / ⌘ + Shift + drag | add to the selection |
+| Right button drag | selection box (`secondaryDrag: SecondaryDrag.select`, default), or pan (`SecondaryDrag.pan`) |
 | Middle button drag, Space + drag | pan |
 | Wheel | zoom at the cursor (`zoomOnScroll`) or pan |
 | Ctrl / ⌘ + wheel, trackpad pinch | zoom |
@@ -89,7 +93,8 @@ controller.config = const NodeEditorConfig(
 | Two-finger touch | pan + pinch zoom |
 | Tap node / edge | select (Ctrl, ⌘ or Shift toggles) |
 | Double tap node | edit dialog (open super nodes) |
-| Right click node / edge / canvas | context menu / `onCanvasContextMenu` |
+| Right click node / edge | context menu |
+| Right click empty canvas | canvas menu (`canvasMenuActions`), or your `onCanvasContextMenu` |
 
 ## Viewport
 

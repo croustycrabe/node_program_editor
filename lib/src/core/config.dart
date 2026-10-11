@@ -11,6 +11,19 @@ enum PanOnDrag {
   select,
 }
 
+/// What a secondary (right) button drag on the canvas does. A right click
+/// without dragging always opens the context menu.
+enum SecondaryDrag {
+  /// Draws a selection box (Ctrl / ⌘ adds to the selection).
+  select,
+
+  /// Pans the viewport.
+  pan,
+
+  /// Nothing.
+  none,
+}
+
 /// Interaction and rendering options of an editor (React Flow style flags).
 @immutable
 class NodeEditorConfig {
@@ -23,6 +36,7 @@ class NodeEditorConfig {
     this.edgesSelectable = true,
     this.deletable = true,
     this.panOnDrag = PanOnDrag.pan,
+    this.secondaryDrag = SecondaryDrag.select,
     this.zoomOnScroll = true,
     this.zoomOnPinch = true,
     this.minZoom = 0.05,
@@ -77,6 +91,9 @@ class NodeEditorConfig {
 
   /// Behaviour of a primary drag on empty canvas.
   final PanOnDrag panOnDrag;
+
+  /// Behaviour of a right button drag on the canvas.
+  final SecondaryDrag secondaryDrag;
 
   /// Whether the mouse wheel zooms.
   final bool zoomOnScroll;
@@ -150,6 +167,7 @@ class NodeEditorConfig {
     bool? edgesSelectable,
     bool? deletable,
     PanOnDrag? panOnDrag,
+    SecondaryDrag? secondaryDrag,
     bool? zoomOnScroll,
     bool? zoomOnPinch,
     double? minZoom,
@@ -178,6 +196,7 @@ class NodeEditorConfig {
     edgesSelectable: edgesSelectable ?? this.edgesSelectable,
     deletable: deletable ?? this.deletable,
     panOnDrag: panOnDrag ?? this.panOnDrag,
+    secondaryDrag: secondaryDrag ?? this.secondaryDrag,
     zoomOnScroll: zoomOnScroll ?? this.zoomOnScroll,
     zoomOnPinch: zoomOnPinch ?? this.zoomOnPinch,
     minZoom: minZoom ?? this.minZoom,

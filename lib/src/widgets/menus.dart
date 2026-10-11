@@ -56,11 +56,18 @@ class EdgeMenuAction {
 }
 
 class _Item {
-  const _Item(this.icon, this.label, this.onTap, {this.destructive = false});
+  const _Item(
+    this.icon,
+    this.label,
+    this.onTap, {
+    this.destructive = false,
+    this.enabled = true,
+  });
   final IconData icon;
   final String label;
   final VoidCallback onTap;
   final bool destructive;
+  final bool enabled;
 }
 
 List<_Item> _nodeItems(
@@ -312,6 +319,7 @@ Future<void> _showItems(
       for (final i in items)
         PopupMenuItem(
           value: i,
+          enabled: i.enabled,
           height: 36,
           child: Row(
             children: [
@@ -356,4 +364,231 @@ Future<void> showEdgeContextMenu(
   final edge = controller.graph.edge(id);
   if (edge == null) return;
   await _showItems(context, global, _edgeItems(controller, edge, extraActions));
+}
+
+/// An entry of the canvas context menu (right click on empty canvas).
+class CanvasMenuAction {
+  /// Creates an action.
+  const CanvasMenuAction({
+    required this.icon,
+    required this.label,
+    required this.onSelected,
+    this.isVisible,
+    this.isEnabled,
+    this.destructive = false,
+  });
+
+  /// Icon.
+  final IconData icon;
+
+  /// Label.
+  final String label;
+
+  /// Called with the canvas context, the controller and the clicked canvas
+  /// position.
+  final void Function(
+    BuildContext context,
+    NodeEditorController controller,
+    Offset canvasPosition,
+  )
+  onSelected;
+
+  /// Whether the action is listed (default: always).
+  final bool Function(NodeEditorController controller)? isVisible;
+
+  /// Whether the action can be chosen (default: always).
+  final bool Function(NodeEditorController controller)? isEnabled;
+
+  /// Shown in the error color.
+  final bool destructive;
+
+  /// "Add node…": searchable node list, the node is added where the user
+  /// clicked.
+  static final addNode = CanvasMenuAction(
+    icon: Icons.add_box_outlined,
+    label: 'Add node…',
+    onSelected: (context, c, pos) => showQuickAddDialog(context, c, pos),
+  );
+
+  /// "Paste here".
+  static final paste = CanvasMenuAction(
+    icon: Icons.content_paste,
+    label: 'Paste here',
+    isEnabled: (c) => c.clipboard != null || c.config.useSystemClipboard,
+    onSelected: (context, c, pos) => c.paste(at: pos),
+  );
+
+  /// "Select all".
+  static final selectAll = CanvasMenuAction(
+    icon: Icons.select_all,
+    label: 'Select all',
+    isEnabled: (c) => c.graph.nodeCount > 0,
+    onSelected: (context, c, pos) => c.selectAll(),
+  );
+
+  /// "Fit view".
+  static final fitView = CanvasMenuAction(
+    icon: Icons.fit_screen,
+    label: 'Fit view',
+    isEnabled: (c) => c.graph.nodeCount > 0,
+    onSelected: (context, c, pos) => c.fitView(),
+  );
+
+  /// "Auto layout".
+  static final autoLayout = CanvasMenuAction(
+    icon: Icons.auto_fix_high,
+    label: 'Auto layout',
+    isEnabled: (c) => c.graph.nodeCount > 1,
+    onSelected: (context, c, pos) {
+      c.autoLayout();
+      c.fitView();
+    },
+  );
+
+  /// "Undo".
+  static final undo = CanvasMenuAction(
+    icon: Icons.undo,
+    label: 'Undo',
+    isEnabled: (c) => c.history.canUndo,
+    onSelected: (context, c, pos) => c.undo(),
+  );
+
+  /// "Leave function" (only inside a super node).
+  static final exitFunction = CanvasMenuAction(
+    icon: Icons.arrow_back,
+    label: 'Leave function',
+    isVisible: (c) => c.scopes.length > 1,
+    onSelected: (context, c, pos) => c.exitSuperNode(),
+  );
+
+  /// The default menu.
+  static List<CanvasMenuAction> get defaults => [
+    addNode,
+    paste,
+    selectAll,
+    fitView,
+    autoLayout,
+    undo,
+    exitFunction,
+  ];
+}
+
+/// Shows the canvas context menu at [global] with [actions].
+Future<void> showCanvasContextMenu(
+  BuildContext context,
+  NodeEditorController controller,
+  Offset canvasPosition,
+  Offset global, {
+  List<CanvasMenuAction>? actions,
+}) async {
+  final items = [
+    for (final a in actions ?? CanvasMenuAction.defaults)
+      if (a.isVisible?.call(controller) ?? true)
+        _Item(
+          a.icon,
+          a.label,
+          () => a.onSelected(context, controller, canvasPosition),
+          destructive: a.destructive,
+          enabled: a.isEnabled?.call(controller) ?? true,
+        ),
+  ];
+  if (items.isEmpty) return;
+  await _showItems(context, global, items);
+}
+
+/// Searchable list of node types; the chosen node is added with its
+/// top-left corner at [canvasPosition].
+Future<void> showQuickAddDialog(
+  BuildContext context,
+  NodeEditorController controller,
+  Offset canvasPosition,
+) {
+  return showDialog<void>(
+    context: context,
+    builder: (context) =>
+        _QuickAddDialog(controller: controller, position: canvasPosition),
+  );
+}
+
+class _QuickAddDialog extends StatefulWidget {
+  const _QuickAddDialog({required this.controller, required this.position});
+  final NodeEditorController controller;
+  final Offset position;
+
+  @override
+  State<_QuickAddDialog> createState() => _QuickAddDialogState();
+}
+
+class _QuickAddDialogState extends State<_QuickAddDialog> {
+  String _query = '';
+
+  @override
+  Widget build(BuildContext context) {
+    final c = widget.controller;
+    final q = _query.trim().toLowerCase();
+    final defs = [
+      for (final d in c.registry.definitions)
+        if (!d.category.startsWith('__') &&
+            c.canInsertType(d.type) &&
+            (q.isEmpty ||
+                d.title.toLowerCase().contains(q) ||
+                d.category.toLowerCase().contains(q) ||
+                d.tags.any((t) => t.toLowerCase().contains(q))))
+          d,
+    ];
+    void add(NodeDefinition d) {
+      Navigator.pop(context);
+      c.addNode(d.type, position: widget.position);
+    }
+
+    return AlertDialog(
+      title: const Text('Add node'),
+      contentPadding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      content: SizedBox(
+        width: 360,
+        height: 420,
+        child: Column(
+          children: [
+            TextField(
+              autofocus: true,
+              decoration: const InputDecoration(
+                isDense: true,
+                prefixIcon: Icon(Icons.search),
+                hintText: 'Search…',
+                border: OutlineInputBorder(),
+              ),
+              onChanged: (v) => setState(() => _query = v),
+              onSubmitted: (_) {
+                if (defs.isNotEmpty) add(defs.first);
+              },
+            ),
+            const SizedBox(height: 8),
+            Expanded(
+              child: ListView(
+                children: [
+                  for (final d in defs)
+                    ListTile(
+                      dense: true,
+                      leading: Icon(
+                        d.icon ?? Icons.widgets_outlined,
+                        color: d.style?.headerColor,
+                      ),
+                      title: Text(d.title),
+                      subtitle: Text(d.category),
+                      onTap: () => add(d),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+      ],
+    );
+  }
 }

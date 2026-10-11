@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
@@ -60,6 +61,8 @@ class NodeCanvas extends StatefulWidget {
     this.edgeMenuActions = const [],
     this.autofocus = true,
     this.useShaders = true,
+    this.canvasMenuActions,
+    this.disableBrowserContextMenu = true,
     this.onEditNode,
     this.onEditEdge,
   });
@@ -98,6 +101,17 @@ class NodeCanvas extends StatefulWidget {
   /// Whether fragment shaders are used when available.
   final bool useShaders;
 
+  /// Entries of the menu shown on a right click on empty canvas. Null uses
+  /// [CanvasMenuAction.defaults]; an empty list disables the menu. Setting
+  /// `controller.onCanvasContextMenu` replaces the menu entirely.
+  final List<CanvasMenuAction>? canvasMenuActions;
+
+  /// On the web, disables the browser's own context menu while the canvas
+  /// is mounted, so right clicks reach the editor (menus, right-drag
+  /// selection). The browser menu is restored when the last canvas is
+  /// disposed.
+  final bool disableBrowserContextMenu;
+
   /// Replaces the built-in node edit dialog.
   final void Function(BuildContext context, NodeId id)? onEditNode;
 
@@ -131,6 +145,7 @@ class _NodeCanvasState extends State<NodeCanvas> with TickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
+    if (kIsWeb && widget.disableBrowserContextMenu) _BrowserMenu.acquire();
     EditorShaders.enabled = widget.useShaders;
     unawaited(EditorShaders.ensureLoaded());
     _attach(_c);
@@ -179,6 +194,7 @@ class _NodeCanvasState extends State<NodeCanvas> with TickerProviderStateMixin {
 
   @override
   void dispose() {
+    if (kIsWeb && widget.disableBrowserContextMenu) _BrowserMenu.release();
     _detach(_c);
     _flowTicker.dispose();
     _viewAnim.dispose();
@@ -265,6 +281,10 @@ class _NodeCanvasState extends State<NodeCanvas> with TickerProviderStateMixin {
         _lastKind == PointerDeviceKind.trackpad;
     if (d.pointerCount >= 2 || trackpad) {
       _mode = _GestureMode.panZoom;
+    } else if (_lastButtons & kSecondaryMouseButton != 0) {
+      _mode = _c.config.secondaryDrag == SecondaryDrag.pan
+          ? _GestureMode.pan
+          : _GestureMode.marquee;
     } else if (_lastButtons & kMiddleMouseButton != 0 || space) {
       _mode = _GestureMode.pan;
     } else {
@@ -337,7 +357,18 @@ class _NodeCanvasState extends State<NodeCanvas> with TickerProviderStateMixin {
       _showEdgeContextMenu(edge.id, d.globalPosition);
       return;
     }
-    _c.onCanvasContextMenu?.call(canvasPos, d.globalPosition);
+    final custom = _c.onCanvasContextMenu;
+    if (custom != null) {
+      custom(canvasPos, d.globalPosition);
+      return;
+    }
+    showCanvasContextMenu(
+      context,
+      _c,
+      canvasPos,
+      d.globalPosition,
+      actions: widget.canvasMenuActions,
+    );
   }
 
   void _onPointerSignal(PointerSignalEvent event) {
@@ -509,7 +540,13 @@ class _NodeCanvasState extends State<NodeCanvas> with TickerProviderStateMixin {
                             >(
                               () => ScaleGestureRecognizer(
                                 allowedButtonsFilter: (b) =>
-                                    b & (kPrimaryButton | kMiddleMouseButton) !=
+                                    b &
+                                        (kPrimaryButton |
+                                            kMiddleMouseButton |
+                                            (_c.config.secondaryDrag ==
+                                                    SecondaryDrag.none
+                                                ? 0
+                                                : kSecondaryMouseButton)) !=
                                     0,
                               ),
                               (r) => r
@@ -629,4 +666,21 @@ class _EditorAction<T extends Intent> extends CallbackAction<T> {
 
   @override
   bool consumesKey(T intent) => !_textHasFocus;
+}
+
+/// Reference counted toggle of the browser context menu (web only).
+abstract final class _BrowserMenu {
+  static int _users = 0;
+
+  static void acquire() {
+    if (_users++ == 0) {
+      BrowserContextMenu.disableContextMenu().catchError((Object _) {});
+    }
+  }
+
+  static void release() {
+    if (--_users == 0) {
+      BrowserContextMenu.enableContextMenu().catchError((Object _) {});
+    }
+  }
 }
